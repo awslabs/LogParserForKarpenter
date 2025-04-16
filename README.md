@@ -8,6 +8,7 @@
 * v1.0.x \*
 * v1.1.x
 * v1.2.x
+* v1.3.x
 
 \* Note: "messageKind":"spot_interrupted" is first supported with Karpenter version v1.1.x, so **LogParserForKarpenter (lp4k)** does not provide *interruptiontime* and *interruptionkind* in earlier versions
 
