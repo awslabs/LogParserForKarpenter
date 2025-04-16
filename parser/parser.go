@@ -14,6 +14,8 @@ import (
 	"github.com/nav-inc/datetime"
 )
 
+var header string = "nodeclaim,createdtime,nodepool,instancetypes,launchedtime,providerid,instancetype,zone,capacitytype,registeredtime,k8snodename,initializedtime,nodereadytime,nodereadytimesec,disruptiontime,disruptionreason,disruptiondecision,disruptednodecount,replacementnodecount,disruptedpodcount,annotationtime,annotation,tainttime,taint,interruptiontime,interruptionkind,deletedtime,nodeterminationtime,nodeterminationtimesec,nodelifecycletime,nodelifecycletimesec,initialized,deleted"
+
 // keep disruptednodecount, replacementnodecount, disruptedpodcount as strings because then we can have empty string ("") to differ from real values
 type Nodeclaimstruct struct {
 	createdtime, nodepool, instancetypes, launchedtime, providerid, instancetype, zone, capacitytype, registeredtime, k8snodename, initializedtime string
@@ -496,7 +498,7 @@ func PrintSortedResult(nodeclaimmap *map[string]Nodeclaimstruct) {
 		s := sortResult(nodeclaimmap)
 
 		// iterate over the slice to get the desired order of nodeclaim by createdtime
-		fmt.Println("nodeclaim,createdtime,nodepool,instancetypes,launchedtime,providerid,instancetype,zone,capacitytype,registeredtime,k8snodename,initializedtime,nodereadytime,nodereadytimesec,disruptiontime,disruptionreason,disruptiondecision,disruptednodecount,replacementnodecount,disruptedpodcount,annotationtime,annotation,interruptiontime,tainttime,taint,interruptionkind,deletedtime,nodeterminationtime,nodeterminationtimesec,nodelifecycletime,nodelifecycletimesec,initialized,deleted")
+		fmt.Println(header)
 
 		for _, v := range s {
 			//fmt.Println(v.key, "->", v.value)
@@ -514,7 +516,7 @@ func ConvertResult(nodeclaimmap *map[string]Nodeclaimstruct) map[string]string {
 		s := sortResult(nodeclaimmap)
 
 		// add header
-		keyvalueMap["nodeclaim"] = "nodeclaim,createdtime,nodepool,instancetypes,launchedtime,providerid,instancetype,zone,capacitytype,registeredtime,k8snodename,initializedtime,nodereadytime,nodereadytimesec,disruptiontime,disruptionreason,disruptiondecision,disruptednodecount,replacementnodecount,disruptedpodcount,annotationtime,annotation,interruptiontime,tainttime,taint,interruptionkind,deletedtime,nodeterminationtime,nodeterminationtimesec,nodelifecycletime,nodelifecycletimesec,initialized,deleted"
+		keyvalueMap["nodeclaim"] = header
 		// add all information as key-value
 		for _, v := range s {
 			keyvalueMap[v.key] = fmt.Sprintf("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%.1f,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%.1f,%s,%.1f,%t,%t\n", v.value.createdtime, v.value.nodepool, v.value.instancetypes, v.value.launchedtime, v.value.providerid, v.value.instancetype, v.value.zone, v.value.capacitytype, v.value.registeredtime, v.value.k8snodename, v.value.initializedtime, v.value.nodereadytime, v.value.nodereadytimesec, v.value.disruptiontime, v.value.disruptionreason, v.value.disruptiondecision, v.value.disruptednodecount, v.value.replacementnodecount, v.value.disruptedpodcount, v.value.annotationtime, v.value.annotation, v.value.tainttime, v.value.taint, v.value.interruptiontime, v.value.interruptionkind, v.value.deletedtime, v.value.nodeterminationtime, v.value.nodeterminationtimesec, v.value.nodelifecycletime, v.value.nodelifecycletimesec, v.value.initialized, v.value.deleted)
