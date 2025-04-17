@@ -42,7 +42,8 @@ func matchPattern(pattern, logline string) []string {
 func headerIndex() string {
 	headerSlice := strings.Split(header, ",")
 	for index, element := range headerSlice {
-		headerSlice[index] = fmt.Sprintf("%s(%d)", element, index)
+		// Go slices start with index 0, but Linux utils like awk count from 1
+		headerSlice[index] = fmt.Sprintf("%s(%d)", element, index+1)
 	}
 	return strings.Join(headerSlice, ",")
 }
@@ -513,8 +514,8 @@ func PrintSortedResult(nodeclaimmap *map[string]Nodeclaimstruct) {
 		s := sortResult(nodeclaimmap)
 
 		// iterate over the slice to get the desired order of nodeclaim by createdtime
+		// offset 1 to make post-processing with tools like aws easier
 		fmt.Println(headerIndex())
-		fmt.Println(headerRemain())
 
 		for _, v := range s {
 			//fmt.Println(v.key, "->", v.value)
@@ -532,6 +533,7 @@ func ConvertResult(nodeclaimmap *map[string]Nodeclaimstruct) map[string]string {
 		s := sortResult(nodeclaimmap)
 
 		// add header
+		// Each key must consist of alphanumeric characters, '-', '_' or '.' so nodeclaim names must comply (add a check later)
 		keyvalueMap["nodeclaim"] = headerRemain()
 		// add all information as key-value
 		for _, v := range s {
