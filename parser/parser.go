@@ -38,6 +38,21 @@ func matchPattern(pattern, logline string) []string {
 	return re.FindStringSubmatch(logline)
 }
 
+// internal helper function for header indexing
+func headerIndex() string {
+	headerSlice := strings.Split(header, ",")
+	for index, element := range headerSlice {
+		headerSlice[index] = fmt.Sprintf("%s(%d)", element, index)
+	}
+	return strings.Join(headerSlice, ",")
+}
+
+// helper function index header without nodeclaim
+func headerRemain() string {
+	headerSlice := strings.Split(headerIndex(), ",")
+	return strings.Join(headerSlice[1:], ",")
+}
+
 // main parsing logic
 func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct, k8snodenamemap *map[string]string, filename string, inputline int) {
 	var createdtime, nodepool, instancetypes, nodeclaim string
@@ -498,7 +513,8 @@ func PrintSortedResult(nodeclaimmap *map[string]Nodeclaimstruct) {
 		s := sortResult(nodeclaimmap)
 
 		// iterate over the slice to get the desired order of nodeclaim by createdtime
-		fmt.Println(header)
+		fmt.Println(headerIndex())
+		fmt.Println(headerRemain())
 
 		for _, v := range s {
 			//fmt.Println(v.key, "->", v.value)
@@ -516,7 +532,7 @@ func ConvertResult(nodeclaimmap *map[string]Nodeclaimstruct) map[string]string {
 		s := sortResult(nodeclaimmap)
 
 		// add header
-		keyvalueMap["nodeclaim"] = header
+		keyvalueMap["nodeclaim"] = headerRemain()
 		// add all information as key-value
 		for _, v := range s {
 			keyvalueMap[v.key] = fmt.Sprintf("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%.1f,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%.1f,%s,%.1f,%t,%t\n", v.value.createdtime, v.value.nodepool, v.value.instancetypes, v.value.launchedtime, v.value.providerid, v.value.instancetype, v.value.zone, v.value.capacitytype, v.value.registeredtime, v.value.k8snodename, v.value.initializedtime, v.value.nodereadytime, v.value.nodereadytimesec, v.value.disruptiontime, v.value.disruptionreason, v.value.disruptiondecision, v.value.disruptednodecount, v.value.replacementnodecount, v.value.disruptedpodcount, v.value.annotationtime, v.value.annotation, v.value.tainttime, v.value.taint, v.value.interruptiontime, v.value.interruptionkind, v.value.deletedtime, v.value.nodeterminationtime, v.value.nodeterminationtimesec, v.value.nodelifecycletime, v.value.nodelifecycletimesec, v.value.initialized, v.value.deleted)
