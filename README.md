@@ -43,8 +43,41 @@ or for attaching to K8s/EKS cluster in current KUBECONFOG context
 
 The sample output file [sample-multi-file-klp-output.csv](sample-multi-file-klp-output.csv) shows all exposed nodeclaim information and can be used as a sample starter to build analysis on top of it.
 
-## Start using LogParserForKarpenter
-[Amazon QuickSight](https://docs.aws.amazon.com/quicksight/latest/user/welcome.html) or Microsoft Excel are possible choices to use the CSV output to create graphs and/or pivot tables.
+## Analyse LogParserForKarpenter output
+The simplest way for analysis is to use the output and parse it using standard Linux utilities like awk, cut and grep.
+```console
+# indexed header
+$ head -1 sample-multi-file-klp-output.csv 
+nodeclaim(1),createdtime(2),nodepool(3),instancetypes(4),launchedtime(5),providerid(6),instancetype(7),zone(8),capacitytype(9),registeredtime(10),k8snodename(11),initializedtime(12),nodereadytime(13),nodereadytimesec(14),disruptiontime(15),disruptionreason(16),disruptiondecision(17),disruptednodecount(18),replacementnodecount(19),disruptedpodcount(20),annotationtime(21),annotation(22),tainttime(23),taint(24),interruptiontime(25),interruptionkind(26),deletedtime(27),nodeterminationtime(28),nodeterminationtimesec(29),nodelifecycletime(30),nodelifecycletimesec(31),initialized(32),deleted(33)
+
+# print nodeclaim(index/column=1), nodereadytime(13),nodereadytimesec(14)
+$ cat sample-multi-file-klp-output.csv | awk -F  ',' '{print $1,$13,$14 }' | more
+nodeclaim(1) nodereadytime(13) nodereadytimesec(14)
+spot-844xp 1m18.591s 78.6
+default-brbk4 0s 0.0
+default-lpc62 50.935s 50.9
+default-j4lj7 43.617s 43.6
+default-mpz2w 46.277s 46.3
+default-8sxj9 36.714s 36.7
+default-zgb22 35.008s 35.0
+local-storage-raid-al2023-kdsvk 41.839s 41.8
+local-storage-raid-al2023-tq7v5 43.922s 43.9
+local-storage-raid-al2023-9kx8z 48.781s 48.8
+...
+
+# search for specific value sof a specific nodeclaim
+$ cat sample-multi-file-klp-output.csv | awk -F  ',' '/local-storage-raid-al2023-nccxt/ { print $1,$13,$14 }'
+local-storage-raid-al2023-nccxt 1m8.447s 68.4
+
+# combine directly with lp4k and raw Karpenter controller logs
+$ ./lp4k karpenter-log-0.37.7.txt | awk -F  ',' '{ print $1,$13,$14 }'
+nodeclaim(1) nodereadytime(13) nodereadytimesec(14)
+default-brbk4 0s 0.0
+default-lpc62 50.935s 50.9
+default-j4lj7 43.617s 43.6
+default-mpz2w 46.277s 46.3
+```
+[Amazon QuickSight](https://docs.aws.amazon.com/quicksight/latest/user/welcome.html) or Microsoft Excel are possible choices to use the CSV output for advanced analysis to create graphs and/or pivot tables.
 
 ![Sample 1](Quicksight_sample_graph.png
  "Sample Quicksight graph")
