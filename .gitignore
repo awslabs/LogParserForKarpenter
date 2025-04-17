@@ -1,1 +1,5 @@
+lp4k
+karpenter-*.txt
+.DS_Store
 bin/
+.vscode/
