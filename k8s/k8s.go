@@ -15,7 +15,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
-	klp "github.com/youwalther65/KarpenterLogParser/parser"
+	lp4k "github.com/awslabs/LogParserForKarpenter/parser"
 )
 
 const (
@@ -46,7 +46,7 @@ func ConnectToK8s(kubeconfig *string) (context.Context, *kubernetes.Clientset) {
 	return ctx, clientSet
 }
 
-func NodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, nodeclaimmap *map[string]klp.Nodeclaimstruct) {
+func NodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, nodeclaimmap *map[string]lp4k.Nodeclaimstruct) {
 	// print current results every minute
 	// create ConfigMap in same namespace
 	// CM data
@@ -60,7 +60,7 @@ func NodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, n
 			Name:      configmap,
 			Namespace: namespace,
 		},
-		Data: klp.ConvertResult(nodeclaimmap),
+		Data: lp4k.ConvertResult(nodeclaimmap),
 	}
 
 	fmt.Println("Create ConfigMap")
@@ -71,32 +71,30 @@ func NodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, n
 		timeStr := fmt.Sprint(time.Now().Format(time.RFC850))
 
 		// get actual data from nodeclaimmap
-		cm.Data = klp.ConvertResult(nodeclaimmap)
+		cm.Data = lp4k.ConvertResult(nodeclaimmap)
 
 		fmt.Println("Update ConfigMap")
 		clientSet.CoreV1().ConfigMaps(namespace).Update(ctx, &cm, metav1.UpdateOptions{})
 
 		fmt.Println("Current time: ", timeStr)
-		klp.PrintSortedResult(nodeclaimmap)
+		lp4k.PrintSortedResult(nodeclaimmap)
 		fmt.Println("Type Ctrl-C to end program")
 	}
 }
 
 // helper function
-func parseLogs(scanner *bufio.Scanner, ch chan bool, nodeclaimmap *map[string]klp.Nodeclaimstruct, k8snodenamemap *map[string]string) {
+func parseLogs(scanner *bufio.Scanner, ch chan bool, nodeclaimmap *map[string]lp4k.Nodeclaimstruct, k8snodenamemap *map[string]string) {
 	//func writeLogs(reader *bufio.Scanner, file *os.File, ch chan bool) {
 	defer func() {
-		// clean up , does not work
-		//klp.PrintSortedResult(nodeclaimmap)
 		ch <- true
 	}()
 	for scanner.Scan() {
 		logline := scanner.Text()
-		klp.ParseKarpenterLogs(logline, nodeclaimmap, k8snodenamemap, "STDIN", 0)
+		lp4k.ParseKarpenterLogs(logline, nodeclaimmap, k8snodenamemap, "STDIN", 0)
 	}
 }
 
-func CollectKarpenterLogs(ctx context.Context, clientSet *kubernetes.Clientset, nodeclaimmap *map[string]klp.Nodeclaimstruct, k8snodenamemap *map[string]string) error {
+func CollectKarpenterLogs(ctx context.Context, clientSet *kubernetes.Clientset, nodeclaimmap *map[string]lp4k.Nodeclaimstruct, k8snodenamemap *map[string]string) error {
 	// get the pods as ListItems
 	pods, err := clientSet.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: label,

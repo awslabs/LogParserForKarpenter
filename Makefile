@@ -16,7 +16,7 @@
 
 VERSION?=v1.0
 
-PKG=https://github.com/youwalther65/KarpenterLogParser
+PKG=https://github.com/awslabs/KarpenterLogParser
 GIT_COMMIT?=$(shell git rev-parse HEAD)
 BUILD_DATE?=$(shell date -u -Iseconds)
 #LDFLAGS?="-X ${PKG}/pkg/driver.driverVersion=${VERSION} -X ${PKG}/pkg/driver.gitCommit=${GIT_COMMIT} -X ${PKG}/pkg/driver.buildDate=${BUILD_DATE} -s -w"

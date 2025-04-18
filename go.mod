@@ -1,4 +1,4 @@
-module github.com/youwalther65/KarpenterLogParser
+module github.com/awslabs/LogParserForKarpenter
 
 go 1.24.2
 
