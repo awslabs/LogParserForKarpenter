@@ -53,10 +53,7 @@ func main() {
 			go k8s.NodeclaimsConfigMap(ctx, clientSet, nodeclaimmap)
 
 			// collect logs
-			err := k8s.CollectKarpenterLogs(ctx, clientSet, nodeclaimmap, k8snodenamemap)
-			if err != nil {
-				log.Println(err, "Failed to collect Karpenter logs")
-			}
+			k8s.CollectKarpenterLogs(ctx, clientSet, nodeclaimmap, k8snodenamemap)
 		} else {
 			fmt.Fprintf(os.Stderr, "Attached to STDIN - parsing iput until EOF or Ctrl-C\n")
 			time.Sleep(1 * time.Second)

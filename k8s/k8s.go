@@ -24,14 +24,13 @@ const (
 	// environment variables
 	namespaceEnv = "KARPENTER_NAMESPACE"
 	labelEnv     = "KARPENTER_LABEL"
-	updateEnv    = "CM_UPDATE_FREQ"
+	updateEnv    = "KARPENTER_CM_UPDATE_FREQ"
 	// hard-coded
 	configmap = "karpenter-nodeclaims-cm"
 )
 
 var namespace, label string
 var cmupdfreq time.Duration
-var cmupdfreqint int
 
 // internal helper function to determine Karpenter namespace and label via OS environment, if not set use defaults
 func init() {
@@ -73,7 +72,7 @@ func ConnectToK8s(kubeconfig *string) (context.Context, *kubernetes.Clientset) {
 		log.Println("Failed to create clientset from the given config")
 		os.Exit(1)
 	} else {
-		fmt.Printf("Connected to K8s cluster - parsing logs until Ctrl-C\n")
+		fmt.Println("Connected to K8s clustern")
 	}
 
 	return ctx, clientSet
@@ -116,14 +115,22 @@ func NodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, n
 	}
 }
 
-func CollectKarpenterLogs(ctx context.Context, clientSet *kubernetes.Clientset, nodeclaimmap *map[string]lp4k.Nodeclaimstruct, k8snodenamemap *map[string]string) error {
+func CollectKarpenterLogs(ctx context.Context, clientSet *kubernetes.Clientset, nodeclaimmap *map[string]lp4k.Nodeclaimstruct, k8snodenamemap *map[string]string) {
 	// get the pods as ListItems
 	pods, err := clientSet.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: label,
 	})
 	if err != nil {
 		log.Println(err, "Failed to get pods")
-		return err
+		os.Exit(1)
+	} else {
+		if len(pods.Items) == 0 {
+			fmt.Printf("\nEmpty pod list - no pods in namespace \"%s\" with label \"%s\" - finishing\n", namespace, label)
+			os.Exit(1)
+		} else {
+			fmt.Printf("\nFound pods in namespace \"%s\" with label \"%s\"\n", namespace, label)
+		}
+
 	}
 	// get the pod lists first, then get the podLogs from each of the pods
 	// use channel for blocking reasons
@@ -133,11 +140,13 @@ func CollectKarpenterLogs(ctx context.Context, clientSet *kubernetes.Clientset, 
 	podItems := pods.Items
 	// for i := 0; i < len(podItems); i++ {
 	for i := range podItems {
+		fmt.Printf("Streaming logs from pod \"%s\" in namespace \"%s\"\n", podItems[i].Name, podItems[i].Namespace)
 		podLogs, err := clientSet.CoreV1().Pods(namespace).GetLogs(podItems[i].Name, &v1.PodLogOptions{
 			Follow: true,
 		}).Stream(ctx)
 		if err != nil {
-			return err
+			log.Println(err, "Failed to stream pod logs")
+			os.Exit(1)
 		}
 		defer podLogs.Close()
 
@@ -148,6 +157,4 @@ func CollectKarpenterLogs(ctx context.Context, clientSet *kubernetes.Clientset, 
 	defer func() {
 		<-ch
 	}()
-
-	return nil
 }
