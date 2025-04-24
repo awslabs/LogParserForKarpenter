@@ -9,6 +9,7 @@
 * v1.1.x
 * v1.2.x
 * v1.3.x
+* v1.4.x
 
 \* Note: "messageKind":"spot_interrupted" is first supported with Karpenter version v1.1.x, so **LogParserForKarpenter (lp4k)** does not provide *interruptiontime* and *interruptionkind* in earlier versions
 
@@ -29,6 +30,10 @@ make
 A binary `lp4k` for your OS and platform is build in directory `bin`.
 
 Then run it like:
+```bash
+./lp4k sample-input.txt
+```
+or
 ```bash
 ./lp4k <Karpenter log output file 1> [... <Karpenter log output file n>]
 ```

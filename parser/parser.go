@@ -3,6 +3,7 @@
 package parser
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"regexp"
@@ -47,10 +48,44 @@ func headerIndex() string {
 	return strings.Join(headerSlice, ",")
 }
 
-// helper function index header without nodeclaim
+// internal helper function index header without nodeclaim
 func headerRemain() string {
 	headerSlice := strings.Split(headerIndex(), ",")
 	return strings.Join(headerSlice[1:], ",")
+}
+
+// internal helper function for scanner error handling
+func scannerErr(scanner *bufio.Scanner, stdin string) {
+	// Ctrl-C will always lead to "http2: response body closed", so suppress this error
+	if err := scanner.Err(); err != nil {
+		if err.Error() != "http2: response body closed" {
+			fmt.Fprintf(os.Stderr, "Error \"%s\" parsing %s\n", err, stdin)
+		}
+	}
+}
+
+// wrapper around main parsing logic with blocking
+func BlockingParser(ch chan os.Signal, scanner *bufio.Scanner, nodeclaimmap *map[string]Nodeclaimstruct, k8snodenamemap *map[string]string, stdin string, inputline int) {
+	// main parsing logic
+	for scanner.Scan() {
+		//logline := scanner.Text()
+		ParseKarpenterLogs(scanner.Text(), nodeclaimmap, k8snodenamemap, stdin, inputline)
+		// we wait until Ctrl-C because we have an input from something like "kubectl logs -n karpenter -l=app.kubernetes.io/name=karpenter -f"
+		go func() {
+			<-ch
+		}()
+	}
+	scannerErr(scanner, stdin)
+}
+
+// wrapper around main parsing logic without blocking
+func NonBlockingParser(scanner *bufio.Scanner, nodeclaimmap *map[string]Nodeclaimstruct, k8snodenamemap *map[string]string, stdin string, inputline int) {
+	// main parsing logic
+	for scanner.Scan() {
+		//logline := scanner.Text()
+		ParseKarpenterLogs(scanner.Text(), nodeclaimmap, k8snodenamemap, stdin, inputline)
+	}
+	scannerErr(scanner, stdin)
 }
 
 // main parsing logic

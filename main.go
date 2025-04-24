@@ -21,11 +21,12 @@ import (
 )
 
 func main() {
-	var logline, filename string
+	//var logline, filename string
+	var filename string
 	var nodeclaimmap *map[string]lp4k.Nodeclaimstruct
 	// helper map of k8snodename to nodeclaim
 	var k8snodenamemap *map[string]string
-	var inputline int
+	//var inputline int
 
 	// intialize maps
 	nodeclaimes := make(map[string]lp4k.Nodeclaimstruct)
@@ -59,25 +60,16 @@ func main() {
 		} else {
 			fmt.Fprintf(os.Stderr, "Attached to STDIN - parsing iput until EOF or Ctrl-C\n")
 			time.Sleep(1 * time.Second)
+
 			ch := make(chan os.Signal, 1)
 			signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
-			scanner := bufio.NewScanner(os.Stdin)
-			// this is used to reference line in STDIN
-			inputline = 0
+
 			// main parsing logic
-			for scanner.Scan() {
-				logline = scanner.Text()
-				lp4k.ParseKarpenterLogs(logline, nodeclaimmap, k8snodenamemap, "STDIN", inputline)
-				// we wait until Ctrl-C because we have an input from something like "kubectl logs -n karpenter -l=app.kubernetes.io/name=karpenter -f"
-				go func() {
-					<-ch
-				}()
-			}
-			if err := scanner.Err(); err != nil {
-				fmt.Fprintf(os.Stderr, "Error \"%s\" parsing input file %s\n", err, filename)
-			}
+			lp4k.BlockingParser(ch, bufio.NewScanner(os.Stdin), nodeclaimmap, k8snodenamemap, filename, 0)
+
 			// STDIN empty or Ctrl-C
 			fmt.Fprintf(os.Stderr, "Finished parsing STDIN\n\n")
+
 			// print nodeclaim output to STDOUT
 			lp4k.PrintSortedResult(nodeclaimmap)
 		}
@@ -93,19 +85,8 @@ func main() {
 			}
 			defer file.Close()
 
-			scanner := bufio.NewScanner(file)
-			// this is used to reference lines in input files
-			inputline = 0
-
 			// main parsing logic
-			for scanner.Scan() {
-				logline = scanner.Text()
-				lp4k.ParseKarpenterLogs(logline, nodeclaimmap, k8snodenamemap, filename, inputline)
-			}
-
-			if err := scanner.Err(); err != nil {
-				fmt.Fprintf(os.Stderr, "Error \"%s\" parsing input file %s\n", err, filename)
-			}
+			lp4k.NonBlockingParser(bufio.NewScanner(file), nodeclaimmap, k8snodenamemap, filename, 0)
 
 			fmt.Fprintf(os.Stderr, "Finished parsing input file %s\n", filename)
 		}
