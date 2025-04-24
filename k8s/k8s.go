@@ -112,7 +112,6 @@ func CollectKarpenterLogs(ctx context.Context, clientSet *kubernetes.Clientset, 
 	}
 	// get the pod lists first, then get the podLogs from each of the pods
 	// use channel for blocking reasons
-	// ch := make(chan bool)
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 
