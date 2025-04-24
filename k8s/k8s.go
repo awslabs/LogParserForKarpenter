@@ -87,16 +87,18 @@ func NodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, n
 
 // helper function
 func parseLogs(scanner *bufio.Scanner, nodeclaimmap *map[string]lp4k.Nodeclaimstruct, k8snodenamemap *map[string]string) {
+	stdin := "STDIN"
 	// main parsing logic
 	for scanner.Scan() {
 		logline := scanner.Text()
-		lp4k.ParseKarpenterLogs(logline, nodeclaimmap, k8snodenamemap, "STDIN", 0)
-
-		if err := scanner.Err(); err != nil {
-			log.Fatal(err)
+		lp4k.ParseKarpenterLogs(logline, nodeclaimmap, k8snodenamemap, stdin, 0)
+	}
+	// Ctrl-C will always lead to "http2: response body closed", so suppress this error
+	if err := scanner.Err(); err != nil {
+		if err.Error() != "http2: response body closed" {
+			fmt.Fprintf(os.Stderr, "Error \"%s\" parsing %s\n", err, stdin)
 		}
 	}
-
 }
 
 func CollectKarpenterLogs(ctx context.Context, clientSet *kubernetes.Clientset, nodeclaimmap *map[string]lp4k.Nodeclaimstruct, k8snodenamemap *map[string]string) error {

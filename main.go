@@ -74,7 +74,7 @@ func main() {
 				}()
 			}
 			if err := scanner.Err(); err != nil {
-				log.Fatal(err)
+				fmt.Fprintf(os.Stderr, "Error \"%s\" parsing input file %s\n", err, filename)
 			}
 			// STDIN empty or Ctrl-C
 			fmt.Fprintf(os.Stderr, "Finished parsing STDIN\n\n")
@@ -104,7 +104,7 @@ func main() {
 			}
 
 			if err := scanner.Err(); err != nil {
-				log.Fatal(err)
+				fmt.Fprintf(os.Stderr, "Error \"%s\" parsing input file %s\n", err, filename)
 			}
 
 			fmt.Fprintf(os.Stderr, "Finished parsing input file %s\n", filename)
