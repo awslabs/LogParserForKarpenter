@@ -41,7 +41,7 @@ or
 ```bash
 kubectl logs -n karpenter -l=app.kubernetes.io/name=karpenter [-f] | ./lp4k
 ```
-or for attaching to K8s/EKS cluster in current KUBECONFOG context
+or for attaching to K8s/EKS cluster in current KUBECONFIG context
 ```bash
 ./lp4k
 ```
