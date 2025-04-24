@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -25,11 +26,10 @@ const (
 	namespaceEnv = "KARPENTER_NAMESPACE"
 	labelEnv     = "KARPENTER_LABEL"
 	updateEnv    = "KARPENTER_CM_UPDATE_FREQ"
-	// hard-coded
-	configmap = "karpenter-nodeclaims-cm"
+	configmapEnv = "KARPENTER_LP4K_CM"
 )
 
-var namespace, label string
+var namespace, label, configmappref string
 var cmupdfreq time.Duration
 
 // internal helper function to determine Karpenter namespace and label via OS environment, if not set use defaults
@@ -55,6 +55,10 @@ func init() {
 			os.Exit(1)
 		}
 	}
+	configmappref = os.Getenv(configmapEnv)
+	if configmappref == "" {
+		configmappref = "lp4k-cm"
+	}
 }
 
 func ConnectToK8s(kubeconfig *string) (context.Context, *kubernetes.Clientset) {
@@ -72,16 +76,23 @@ func ConnectToK8s(kubeconfig *string) (context.Context, *kubernetes.Clientset) {
 		log.Println("Failed to create clientset from the given config")
 		os.Exit(1)
 	} else {
-		fmt.Println("Connected to K8s clustern")
+		fmt.Println("Connected to K8s cluster")
 	}
 
 	return ctx, clientSet
 }
 
 func NodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, nodeclaimmap *map[string]lp4k.Nodeclaimstruct) {
+	var configmap string
 	// print current results every cmupdfreq seconds
 	// create ConfigMap in same namespace like Karpenter namespace
 	// ConfigMap data has to be map[string]string
+
+	// construct ConfigMap name from time stamp - it probably contains non-DNS characters, so modify accordingly
+	configmap = fmt.Sprintf("%s-%s", configmappref, strings.Replace(time.Now().Format(time.RFC3339), ":", "", -1))
+	configmap, _, _ = strings.Cut(configmap, "+")
+	configmap = strings.Replace(configmap, "T", "-", -1)
+
 	cm := v1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ConfigMap",
@@ -91,11 +102,10 @@ func NodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, n
 			Name:      configmap,
 			Namespace: namespace,
 		},
-		Data: lp4k.ConvertResult(nodeclaimmap),
 	}
 
-	fmt.Println("Create ConfigMap")
-	fmt.Printf("\nNext update in %s (%.0f seconds), type Ctrl-C to end program\n", cmupdfreq.String(), cmupdfreq.Seconds())
+	fmt.Printf("Create empty ConfigMap \"%s\" in namespace \"%s\"\n", configmap, namespace)
+	fmt.Printf("\nFirst nodeclaim data in ConfigMap \"%s/%s\" in %s (%.0f seconds), type Ctrl-C to end program\n", namespace, configmap, cmupdfreq.String(), cmupdfreq.Seconds())
 	clientSet.CoreV1().ConfigMaps(namespace).Create(ctx, &cm, metav1.CreateOptions{})
 
 	// update nodeclaim ConfigMap every cmupdfreq seconds cmupdfreq
@@ -107,11 +117,12 @@ func NodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, n
 		cm.Data = lp4k.ConvertResult(nodeclaimmap)
 
 		fmt.Println("\nUpdate ConfigMap")
+		// Update will even Create if non-existing
 		clientSet.CoreV1().ConfigMaps(namespace).Update(ctx, &cm, metav1.UpdateOptions{})
 
 		fmt.Println("Current time: ", timeStr)
 		lp4k.PrintSortedResult(nodeclaimmap)
-		fmt.Printf("\nNext update in %s (%.0f seconds), type Ctrl-C to end program\n", cmupdfreq.String(), cmupdfreq.Seconds())
+		fmt.Printf("\nNext nodeclaim data in ConfigMap \"%s/%s\" in %s (%.0f seconds), type Ctrl-C to end program\n", namespace, configmap, cmupdfreq.String(), cmupdfreq.Seconds())
 	}
 }
 
