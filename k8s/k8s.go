@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -23,6 +25,7 @@ const (
 	namespace = "karpenter"
 	configmap = "karpenter-nodeclaims-cm"
 	label     = "app.kubernetes.io/name=karpenter"
+	cmupdfreq = 30
 )
 
 func ConnectToK8s(kubeconfig *string) (context.Context, *kubernetes.Clientset) {
@@ -66,8 +69,8 @@ func NodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, n
 	fmt.Println("Create ConfigMap")
 	clientSet.CoreV1().ConfigMaps(namespace).Create(ctx, &cm, metav1.CreateOptions{})
 
-	// update nodeclaim ConfigMap every 30s
-	for range time.Tick(time.Second * 30) {
+	// update nodeclaim ConfigMap every cmupdfreq seconds
+	for range time.Tick(time.Second * cmupdfreq) {
 		timeStr := fmt.Sprint(time.Now().Format(time.RFC850))
 
 		// get actual data from nodeclaimmap
@@ -83,15 +86,17 @@ func NodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, n
 }
 
 // helper function
-func parseLogs(scanner *bufio.Scanner, ch chan bool, nodeclaimmap *map[string]lp4k.Nodeclaimstruct, k8snodenamemap *map[string]string) {
-	//func writeLogs(reader *bufio.Scanner, file *os.File, ch chan bool) {
-	defer func() {
-		ch <- true
-	}()
+func parseLogs(scanner *bufio.Scanner, nodeclaimmap *map[string]lp4k.Nodeclaimstruct, k8snodenamemap *map[string]string) {
+	// main parsing logic
 	for scanner.Scan() {
 		logline := scanner.Text()
 		lp4k.ParseKarpenterLogs(logline, nodeclaimmap, k8snodenamemap, "STDIN", 0)
+
+		if err := scanner.Err(); err != nil {
+			log.Fatal(err)
+		}
 	}
+
 }
 
 func CollectKarpenterLogs(ctx context.Context, clientSet *kubernetes.Clientset, nodeclaimmap *map[string]lp4k.Nodeclaimstruct, k8snodenamemap *map[string]string) error {
@@ -103,13 +108,12 @@ func CollectKarpenterLogs(ctx context.Context, clientSet *kubernetes.Clientset, 
 		log.Println(err, "Failed to get pods")
 		return err
 	}
-	// get the pod lists first
-	// then get the podLogs from each of the pods
-	// write to files concurrently
+	// get the pod lists first, then get the podLogs from each of the pods
 	// use channel for blocking reasons
-	// ch := make(chan os.Signal, 1)
-	// signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
-	ch := make(chan bool)
+	// ch := make(chan bool)
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+
 	podItems := pods.Items
 	// for i := 0; i < len(podItems); i++ {
 	for i := range podItems {
@@ -123,12 +127,13 @@ func CollectKarpenterLogs(ctx context.Context, clientSet *kubernetes.Clientset, 
 
 		scanner := bufio.NewScanner(podLogs)
 
-		go parseLogs(scanner, ch, nodeclaimmap, k8snodenamemap)
-		//go writeLogs(reader, file, ch)
+		go parseLogs(scanner, nodeclaimmap, k8snodenamemap)
 	}
 
-	//required for sync with writeLogs
-	<-ch
+	// required to block until Ctrl-C
+	defer func() {
+		<-ch
+	}()
 
 	return nil
 }

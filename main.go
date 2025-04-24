@@ -48,7 +48,7 @@ func main() {
 
 			ctx, clientSet := k8s.ConnectToK8s(kubeconfig)
 
-			// print current results every 30s
+			// print current results every k8s.cmupdfreq seconds (currently hard-coded 30s)
 			go k8s.NodeclaimsConfigMap(ctx, clientSet, nodeclaimmap)
 
 			// collect logs
@@ -59,22 +59,18 @@ func main() {
 		} else {
 			fmt.Fprintf(os.Stderr, "Attached to STDIN - parsing iput until EOF or Ctrl-C\n")
 			time.Sleep(1 * time.Second)
-			c := make(chan os.Signal, 1)
-			signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+			ch := make(chan os.Signal, 1)
+			signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 			scanner := bufio.NewScanner(os.Stdin)
 			// this is used to reference line in STDIN
 			inputline = 0
+			// main parsing logic
 			for scanner.Scan() {
-				//fmt.Println(scanner.Text())
-				// main parsing logic
 				logline = scanner.Text()
 				lp4k.ParseKarpenterLogs(logline, nodeclaimmap, k8snodenamemap, "STDIN", inputline)
 				// we wait until Ctrl-C because we have an input from something like "kubectl logs -n karpenter -l=app.kubernetes.io/name=karpenter -f"
 				go func() {
-					<-c
-					if err := scanner.Err(); err != nil {
-						log.Fatal(err)
-					}
+					<-ch
 				}()
 			}
 			if err := scanner.Err(); err != nil {
@@ -89,7 +85,7 @@ func main() {
 		for _, arg := range os.Args[1:] {
 			filename = arg
 
-			//fmt.Fprintf(os.Stderr, "STDERR: Info - parsing input file %s\n", filename)
+			fmt.Fprintf(os.Stderr, "Parsing input file %s\n", filename)
 
 			file, err := os.Open(filename)
 			if err != nil {
@@ -110,6 +106,8 @@ func main() {
 			if err := scanner.Err(); err != nil {
 				log.Fatal(err)
 			}
+
+			fmt.Fprintf(os.Stderr, "Finished parsing input file %s\n", filename)
 		}
 		// print nodeclaim output to STDOUT
 		lp4k.PrintSortedResult(nodeclaimmap)
