@@ -21,12 +21,42 @@ import (
 )
 
 const (
-	// set namespace and label
-	namespace = "karpenter"
+	// environment variables
+	namespaceEnv = "KARPENTER_NAMESPACE"
+	labelEnv     = "KARPENTER_LABEL"
+	updateEnv    = "CM_UPDATE_FREQ"
+	// hard-coded
 	configmap = "karpenter-nodeclaims-cm"
-	label     = "app.kubernetes.io/name=karpenter"
-	cmupdfreq = 30
 )
+
+var namespace, label string
+var cmupdfreq time.Duration
+var cmupdfreqint int
+
+// internal helper function to determine Karpenter namespace and label via OS environment, if not set use defaults
+func init() {
+	var err error
+
+	namespace = os.Getenv(namespaceEnv)
+	if namespace == "" {
+		namespace = "karpenter"
+	}
+	label = os.Getenv(labelEnv)
+	if label == "" {
+		label = "app.kubernetes.io/name=karpenter"
+	}
+	cmupdfreqstr := os.Getenv(updateEnv)
+	if cmupdfreqstr == "" {
+		cmupdfreqstr = "30s"
+		cmupdfreq, _ = time.ParseDuration(cmupdfreqstr)
+	} else {
+		cmupdfreq, err = time.ParseDuration(cmupdfreqstr)
+		if err != nil {
+			fmt.Println("Invalid environment variable CM_UPDATE_FREQ, must be a valid time.Duration format like \"30s\" or \"2m10s\"")
+			os.Exit(1)
+		}
+	}
+}
 
 func ConnectToK8s(kubeconfig *string) (context.Context, *kubernetes.Clientset) {
 	// use the current context in kubeconfig
@@ -43,17 +73,16 @@ func ConnectToK8s(kubeconfig *string) (context.Context, *kubernetes.Clientset) {
 		log.Println("Failed to create clientset from the given config")
 		os.Exit(1)
 	} else {
-		fmt.Fprintf(os.Stderr, "Connected to K8s cluster - parsing logs until Ctrl-C\n")
+		fmt.Printf("Connected to K8s cluster - parsing logs until Ctrl-C\n")
 	}
 
 	return ctx, clientSet
 }
 
 func NodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, nodeclaimmap *map[string]lp4k.Nodeclaimstruct) {
-	// print current results every minute
-	// create ConfigMap in same namespace
-	// CM data
-	// Create a map with string keys and values
+	// print current results every cmupdfreq seconds
+	// create ConfigMap in same namespace like Karpenter namespace
+	// ConfigMap data has to be map[string]string
 	cm := v1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ConfigMap",
@@ -67,21 +96,23 @@ func NodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, n
 	}
 
 	fmt.Println("Create ConfigMap")
+	fmt.Printf("\nNext update in %s (%.0f seconds), type Ctrl-C to end program\n", cmupdfreq.String(), cmupdfreq.Seconds())
 	clientSet.CoreV1().ConfigMaps(namespace).Create(ctx, &cm, metav1.CreateOptions{})
 
-	// update nodeclaim ConfigMap every cmupdfreq seconds
-	for range time.Tick(time.Second * cmupdfreq) {
+	// update nodeclaim ConfigMap every cmupdfreq seconds cmupdfreq
+	//for range time.Tick(time.Second * 30) {
+	for range time.Tick(cmupdfreq) {
 		timeStr := fmt.Sprint(time.Now().Format(time.RFC850))
 
 		// get actual data from nodeclaimmap
 		cm.Data = lp4k.ConvertResult(nodeclaimmap)
 
-		fmt.Println("Update ConfigMap")
+		fmt.Println("\nUpdate ConfigMap")
 		clientSet.CoreV1().ConfigMaps(namespace).Update(ctx, &cm, metav1.UpdateOptions{})
 
 		fmt.Println("Current time: ", timeStr)
 		lp4k.PrintSortedResult(nodeclaimmap)
-		fmt.Println("Type Ctrl-C to end program")
+		fmt.Printf("\nNext update in %s (%.0f seconds), type Ctrl-C to end program\n", cmupdfreq.String(), cmupdfreq.Seconds())
 	}
 }
 
