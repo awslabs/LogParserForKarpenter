@@ -15,10 +15,28 @@
 
 It allows using either STDIN (for example for piping live Karpenter controller logs) or multiple Karpenter log files as input and will print CSV style formatted output of nodeclaim data ordered by createdtime to STDOUT, so one can easily redirect it into a file and analyse with tools like [Amazon QuickSight](https://docs.aws.amazon.com/quicksight/latest/user/welcome.html) or Microsoft Excel.
 
-If neither STDIN nor log files are used as input, **lp4k** will attach to a running K8s/EKS cluster and parses Karpenter logs (streamed logs, similar to *kubectl logs -f*) and creates a ConfigMap *karpenter-nodeclaims-cm* in *karpenter* namespace, which gets updated every 30s.
+If neither STDIN nor log files are used as input, **lp4k** will attach to a running K8s/EKS cluster and parses Karpenter logs (streamed logs, similar to *kubectl logs -f* using LP4K_KARPENTER_NAMESPACE and LP4K_KARPENTER_LABEL) and creates a ConfigMap *lp4k-cm-\<date\>* in same namespace, which gets updated every LP4K_CM_UPDATE_FREQ.
 
-\* Note: K8s handling currently requires **Karpenter** running in namespace *karpenter* and is not able to re-attach to **Karpenter** pods after restarts (re-deployment etc.)
+\* Note: K8s handling can be configured using the following OS environment variables:
 
+| Environment variable      | Default value     | Description
+| ------------- | ------------- | ------------- |
+| LP4K_KARPENTER_NAMESPACE | "karpenter" | K8s namespace where Karpenter controller is running
+| LP4K_KARPENTER_LABEL | "app.kubernetes.io/name=karpenter" | Karpenter controller K8s pod labels
+| LP4K_CM_UPDATE_FREQ | "30s" | update frequency of ConfigMap and STDOUT if enabled (default), must be valid Go time.Duration string like "30s" or 2m30s"
+| LP4K_CM_PREFIX | "lp4k-cm" | nodeclaim ConfigMap prefix, if KARPENTER_LP4K_CM_OVERRIDE=false or ConfigMap name, if KARPENTER_LP4K_CM_OVERRIDE=true
+| LP4K_CM_OVERRIDE | "false" | determines, if ConfigMap will just use prefix and will be overriden upon every start of lp4k
+| LP4K_NODECLAIM_PRINT | "true" | print nodeclaim information every KARPENTER_CM_UPDATE_FREQ to STDOUT
+
+Use:
+```bash
+LP4K_CM_UPDATE_FREQ=10s ./lp4k
+```
+or permanently
+```bash
+export LP4K_CM_UPDATE_FREQ=10s
+./lp4k
+```
 ----
 
 ## To start using LogParserForKarpenter
@@ -45,7 +63,6 @@ or for attaching to K8s/EKS cluster in current KUBECONFIG context
 ```bash
 ./lp4k
 ```
-
 The sample output file [sample-multi-file-klp-output.csv](sample-multi-file-klp-output.csv) shows all exposed nodeclaim information and can be used as a sample starter to build analysis on top of it.
 
 ## Analyse LogParserForKarpenter output

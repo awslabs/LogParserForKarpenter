@@ -24,12 +24,12 @@ import (
 
 const (
 	// environment variables
-	namespaceEnv         = "KARPENTER_NAMESPACE"
-	labelEnv             = "KARPENTER_LABEL"
-	updateEnv            = "KARPENTER_CM_UPDATE_FREQ"
-	configmapEnv         = "KARPENTER_LP4K_CM"
-	configmapoverrideEnv = "KARPENTER_LP4K_CM_OVERRIDE"
-	nodeclaimprintEnv    = "KARPENTER_LP4K_NODECLAIM_PRINT"
+	namespaceEnv         = "LP4K_KARPENTER_NAMESPACE"
+	labelEnv             = "LP4K_KARPENTER_LABEL"
+	updateEnv            = "LP4K_CM_UPDATE_FREQ"
+	configmapEnv         = "LP4K_CM_PREFIX"
+	configmapoverrideEnv = "LP4K_CM_OVERRIDE"
+	nodeclaimprintEnv    = " LP4K_NODECLAIM_PRINT"
 )
 
 var namespace, label, configmappref, configmap string
