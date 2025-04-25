@@ -11,13 +11,13 @@
 * v1.3.x
 * v1.4.x
 
-\* Note: "messageKind":"spot_interrupted" is first supported with Karpenter version v1.1.x, so **LogParserForKarpenter (lp4k)** does not provide *interruptiontime* and *interruptionkind* in earlier versions
+\* Note: `"messageKind":"spot_interrupted"` is first supported with Karpenter version v1.1.x, so **LogParserForKarpenter (lp4k)** does not provide *interruptiontime* and *interruptionkind* in earlier versions
 
 It allows using either STDIN (for example for piping live Karpenter controller logs) or multiple Karpenter log files as input and will print CSV style formatted output of nodeclaim data ordered by createdtime to STDOUT, so one can easily redirect it into a file and analyse with tools like [Amazon QuickSight](https://docs.aws.amazon.com/quicksight/latest/user/welcome.html) or Microsoft Excel.
 
 If neither STDIN nor log files are used as input, **lp4k** will attach to a running K8s/EKS cluster and parses Karpenter logs (streamed logs, similar to *kubectl logs -f* using LP4K_KARPENTER_NAMESPACE and LP4K_KARPENTER_LABEL) and creates a ConfigMap *lp4k-cm-\<date\>* in same namespace, which gets updated every LP4K_CM_UPDATE_FREQ.
 
-\* Note: K8s handling can be configured using the following OS environment variables:
+K8s handling can be configured using the following OS environment variables:
 
 | Environment variable      | Default value     | Description
 | ------------- | ------------- | ------------- |
@@ -37,6 +37,8 @@ or permanently
 export LP4K_CM_UPDATE_FREQ=10s
 ./lp4k
 ```
+* Note: **lp4k** will recognise new nodeclaims and populate its internal structures first when Karpenter controller logs contain a logline containing `"message":"created nodeclaim"`. That means after a Karpenter controller restart and a subsequent and required restart **lp4k** will not recognise already existing nodeclaims.
+
 ----
 
 ## To start using LogParserForKarpenter
