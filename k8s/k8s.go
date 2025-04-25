@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -23,14 +24,16 @@ import (
 
 const (
 	// environment variables
-	namespaceEnv = "KARPENTER_NAMESPACE"
-	labelEnv     = "KARPENTER_LABEL"
-	updateEnv    = "KARPENTER_CM_UPDATE_FREQ"
-	configmapEnv = "KARPENTER_LP4K_CM"
+	namespaceEnv         = "KARPENTER_NAMESPACE"
+	labelEnv             = "KARPENTER_LABEL"
+	updateEnv            = "KARPENTER_CM_UPDATE_FREQ"
+	configmapEnv         = "KARPENTER_LP4K_CM"
+	configmapoverrideEnv = "KARPENTER_LP4K_CM_OVERRIDE"
 )
 
-var namespace, label, configmappref string
+var namespace, label, configmappref, configmap string
 var cmupdfreq time.Duration
+var cmoverride bool
 
 // internal helper function to determine Karpenter namespace and label via OS environment, if not set use defaults
 func init() {
@@ -59,6 +62,29 @@ func init() {
 	if configmappref == "" {
 		configmappref = "lp4k-cm"
 	}
+	cmoverridestr := os.Getenv(configmapoverrideEnv)
+	if cmoverridestr == "" {
+		cmoverride = false
+	} else {
+		cmoverride, err = strconv.ParseBool(cmoverridestr)
+		if err != nil {
+			cmoverride = false
+		}
+	}
+	if cmoverride {
+		// use unique ConfigMap name and override on every start
+		configmap = configmappref
+		fmt.Printf("Using pods from namespace \"%s\" with label \"%s\"\n", namespace, label)
+		fmt.Printf("Creating/overriding unique ConfigMap \"%s\" in namespace \"%s\" with updates every %s\n\n", configmap, namespace, cmupdfreq.String())
+
+	} else {
+		// construct ConfigMap name from time stamp - it probably contains non-DNS characters, so modify accordingly
+		configmap = fmt.Sprintf("%s-%s", configmappref, strings.Replace(time.Now().Format(time.RFC3339), ":", "", -1))
+		configmap, _, _ = strings.Cut(configmap, "+")
+		configmap = strings.Replace(configmap, "T", "-", -1)
+		fmt.Printf("Using pods from namespace \"%s\" with label \"%s\"\n", namespace, label)
+		fmt.Printf("Creating ConfigMap \"%s\" in namespace \"%s\" with updates every %s\n\n", configmap, namespace, cmupdfreq.String())
+	}
 }
 
 func ConnectToK8s(kubeconfig *string) (context.Context, *kubernetes.Clientset) {
@@ -83,15 +109,9 @@ func ConnectToK8s(kubeconfig *string) (context.Context, *kubernetes.Clientset) {
 }
 
 func NodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, nodeclaimmap *map[string]lp4k.Nodeclaimstruct) {
-	var configmap string
 	// print current results every cmupdfreq seconds
 	// create ConfigMap in same namespace like Karpenter namespace
 	// ConfigMap data has to be map[string]string
-
-	// construct ConfigMap name from time stamp - it probably contains non-DNS characters, so modify accordingly
-	configmap = fmt.Sprintf("%s-%s", configmappref, strings.Replace(time.Now().Format(time.RFC3339), ":", "", -1))
-	configmap, _, _ = strings.Cut(configmap, "+")
-	configmap = strings.Replace(configmap, "T", "-", -1)
 
 	cm := v1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
@@ -117,7 +137,6 @@ func NodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, n
 		cm.Data = lp4k.ConvertResult(nodeclaimmap)
 
 		fmt.Println("\nUpdate ConfigMap")
-		// Update will even Create if non-existing
 		clientSet.CoreV1().ConfigMaps(namespace).Update(ctx, &cm, metav1.UpdateOptions{})
 
 		fmt.Println("Current time: ", timeStr)
