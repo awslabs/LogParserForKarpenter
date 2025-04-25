@@ -108,11 +108,15 @@ default-mpz2w 46.277s 46.3
 ![Sample 2](Quicksight_sample_pivot_table.png
  "Sample Quicksight pivot table")
 
-## To start developing LogParserForKarpenter
+## Contributing
 
-Please contact (mailto:waltju@amazon.com)
+We welcome contributions to **lp4k** ! Please see [CONTRIBUTING.md](doc/CONTRIBUTING.md) for more information on how to report bugs or submit pull requests.
 
-## Security
+### Code of conduct
+
+This project has adopted the [Amazon Open Source Code of Conduct](https://aws.github.io/code-of-conduct). See [CODE_OF_CONDUCT.md](doc/CODE_OF_CONDUCT.md) for more details.
+
+### Security
 
 See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
 
