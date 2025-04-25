@@ -118,7 +118,8 @@ func ConnectToK8s(kubeconfig *string) (context.Context, *kubernetes.Clientset) {
 	return ctx, clientSet
 }
 
-func NodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, nodeclaimmap *map[string]lp4k.Nodeclaimstruct) {
+// internal function to cretae and write ConfigMap with nodeclaims
+func nodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, nodeclaimmap *map[string]lp4k.Nodeclaimstruct) {
 	// print current results every cmupdfreq seconds
 	// create ConfigMap in same namespace like Karpenter namespace
 	// ConfigMap data has to be map[string]string
@@ -134,8 +135,8 @@ func NodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, n
 		},
 	}
 
-	fmt.Fprintf(os.Stderr, "Create empty ConfigMap \"%s\" in namespace \"%s\"\n", configmap, namespace)
-	fmt.Fprintf(os.Stderr, "\nFirst nodeclaim data in ConfigMap \"%s/%s\" in %s (%.0f seconds), type Ctrl-C to end program\n", namespace, configmap, cmupdfreq.String(), cmupdfreq.Seconds())
+	fmt.Fprintf(os.Stderr, "\nCreate empty ConfigMap \"%s\" in namespace \"%s\"\n", configmap, namespace)
+	fmt.Fprintf(os.Stderr, "First nodeclaim data in ConfigMap \"%s/%s\" in %s (%.0f seconds), type Ctrl-C to end program\n", namespace, configmap, cmupdfreq.String(), cmupdfreq.Seconds())
 	clientSet.CoreV1().ConfigMaps(namespace).Create(ctx, &cm, metav1.CreateOptions{})
 
 	// update nodeclaim ConfigMap every cmupdfreq seconds cmupdfreq
@@ -194,6 +195,8 @@ func CollectKarpenterLogs(ctx context.Context, clientSet *kubernetes.Clientset, 
 
 		go lp4k.NonBlockingParser(bufio.NewScanner(podLogs), nodeclaimmap, k8snodenamemap, "STDIN", 0)
 	}
+	// create and update ConfigMap with nodeclaims
+	go nodeclaimsConfigMap(ctx, clientSet, nodeclaimmap)
 
 	// required to block until Ctrl-C
 	defer func() {

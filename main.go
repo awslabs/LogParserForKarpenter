@@ -49,10 +49,7 @@ func main() {
 
 			ctx, clientSet := k8s.ConnectToK8s(kubeconfig)
 
-			// print current results every k8s.cmupdfreq seconds (currently hard-coded 30s)
-			go k8s.NodeclaimsConfigMap(ctx, clientSet, nodeclaimmap)
-
-			// collect logs
+			// collect and parse logs
 			k8s.CollectKarpenterLogs(ctx, clientSet, nodeclaimmap, k8snodenamemap)
 		} else {
 			fmt.Fprintf(os.Stderr, "Attached to STDIN - parsing iput until EOF or Ctrl-C\n")
