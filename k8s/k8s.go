@@ -29,11 +29,12 @@ const (
 	updateEnv            = "KARPENTER_CM_UPDATE_FREQ"
 	configmapEnv         = "KARPENTER_LP4K_CM"
 	configmapoverrideEnv = "KARPENTER_LP4K_CM_OVERRIDE"
+	nodeclaimprintEnv    = "KARPENTER_LP4K_NODECLAIM_PRINT"
 )
 
 var namespace, label, configmappref, configmap string
 var cmupdfreq time.Duration
-var cmoverride bool
+var cmoverride, nodeclaimprint bool
 
 // internal helper function to determine Karpenter namespace and label via OS environment, if not set use defaults
 func init() {
@@ -54,7 +55,7 @@ func init() {
 	} else {
 		cmupdfreq, err = time.ParseDuration(cmupdfreqstr)
 		if err != nil {
-			fmt.Println("Invalid environment variable CM_UPDATE_FREQ, must be a valid time.Duration format like \"30s\" or \"2m10s\"")
+			fmt.Fprintf(os.Stderr, "Invalid environment variable CM_UPDATE_FREQ, must be a valid time.Duration format like \"30s\" or \"2m10s\"\n")
 			os.Exit(1)
 		}
 	}
@@ -71,19 +72,28 @@ func init() {
 			cmoverride = false
 		}
 	}
+	nodeclaimprintstr := os.Getenv(nodeclaimprintEnv)
+	if nodeclaimprintstr == "" {
+		nodeclaimprint = true
+	} else {
+		nodeclaimprint, err = strconv.ParseBool(nodeclaimprintstr)
+		if err != nil {
+			nodeclaimprint = true
+		}
+	}
 	if cmoverride {
 		// use unique ConfigMap name and override on every start
 		configmap = configmappref
-		fmt.Printf("Using pods from namespace \"%s\" with label \"%s\"\n", namespace, label)
-		fmt.Printf("Creating/overriding unique ConfigMap \"%s\" in namespace \"%s\" with updates every %s\n\n", configmap, namespace, cmupdfreq.String())
+		fmt.Fprintf(os.Stderr, "Using pods from namespace \"%s\" with label \"%s\"\n", namespace, label)
+		fmt.Fprintf(os.Stderr, "Creating/overriding unique ConfigMap \"%s\" in namespace \"%s\" with updates every %s\n\n", configmap, namespace, cmupdfreq.String())
 
 	} else {
 		// construct ConfigMap name from time stamp - it probably contains non-DNS characters, so modify accordingly
 		configmap = fmt.Sprintf("%s-%s", configmappref, strings.Replace(time.Now().Format(time.RFC3339), ":", "", -1))
 		configmap, _, _ = strings.Cut(configmap, "+")
 		configmap = strings.Replace(configmap, "T", "-", -1)
-		fmt.Printf("Using pods from namespace \"%s\" with label \"%s\"\n", namespace, label)
-		fmt.Printf("Creating ConfigMap \"%s\" in namespace \"%s\" with updates every %s\n\n", configmap, namespace, cmupdfreq.String())
+		fmt.Fprintf(os.Stderr, "Using pods from namespace \"%s\" with label \"%s\"\n", namespace, label)
+		fmt.Fprintf(os.Stderr, "Creating ConfigMap \"%s\" in namespace \"%s\" with updates every %s\n\n", configmap, namespace, cmupdfreq.String())
 	}
 }
 
@@ -92,17 +102,17 @@ func ConnectToK8s(kubeconfig *string) (context.Context, *kubernetes.Clientset) {
 	ctx := context.TODO()
 	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
 	if err != nil {
-		log.Println(err, "Failed to build config from flags")
+		fmt.Fprintf(os.Stderr, "Failed to build config from flags - %s\n", err.Error())
 		os.Exit(1)
 	}
 
 	// create the K8s clientset
 	clientSet, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		log.Println("Failed to create clientset from the given config")
+		fmt.Fprintf(os.Stderr, "Failed to create clientset from the given config - %s\n", err.Error())
 		os.Exit(1)
 	} else {
-		fmt.Println("Connected to K8s cluster")
+		fmt.Fprintf(os.Stderr, "Connected to K8s cluster\n")
 	}
 
 	return ctx, clientSet
@@ -124,8 +134,8 @@ func NodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, n
 		},
 	}
 
-	fmt.Printf("Create empty ConfigMap \"%s\" in namespace \"%s\"\n", configmap, namespace)
-	fmt.Printf("\nFirst nodeclaim data in ConfigMap \"%s/%s\" in %s (%.0f seconds), type Ctrl-C to end program\n", namespace, configmap, cmupdfreq.String(), cmupdfreq.Seconds())
+	fmt.Fprintf(os.Stderr, "Create empty ConfigMap \"%s\" in namespace \"%s\"\n", configmap, namespace)
+	fmt.Fprintf(os.Stderr, "\nFirst nodeclaim data in ConfigMap \"%s/%s\" in %s (%.0f seconds), type Ctrl-C to end program\n", namespace, configmap, cmupdfreq.String(), cmupdfreq.Seconds())
 	clientSet.CoreV1().ConfigMaps(namespace).Create(ctx, &cm, metav1.CreateOptions{})
 
 	// update nodeclaim ConfigMap every cmupdfreq seconds cmupdfreq
@@ -136,12 +146,14 @@ func NodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, n
 		// get actual data from nodeclaimmap
 		cm.Data = lp4k.ConvertResult(nodeclaimmap)
 
-		fmt.Println("\nUpdate ConfigMap")
+		fmt.Fprintf(os.Stderr, "\nUpdate ConfigMap\n")
 		clientSet.CoreV1().ConfigMaps(namespace).Update(ctx, &cm, metav1.UpdateOptions{})
 
-		fmt.Println("Current time: ", timeStr)
-		lp4k.PrintSortedResult(nodeclaimmap)
-		fmt.Printf("\nNext nodeclaim data in ConfigMap \"%s/%s\" in %s (%.0f seconds), type Ctrl-C to end program\n", namespace, configmap, cmupdfreq.String(), cmupdfreq.Seconds())
+		fmt.Fprintf(os.Stderr, "Current time: %s\n", timeStr)
+		if nodeclaimprint {
+			lp4k.PrintSortedResult(nodeclaimmap)
+		}
+		fmt.Fprintf(os.Stderr, "\nNext nodeclaim data in ConfigMap \"%s/%s\" in %s (%.0f seconds), type Ctrl-C to end program\n", namespace, configmap, cmupdfreq.String(), cmupdfreq.Seconds())
 	}
 }
 
@@ -155,10 +167,10 @@ func CollectKarpenterLogs(ctx context.Context, clientSet *kubernetes.Clientset, 
 		os.Exit(1)
 	} else {
 		if len(pods.Items) == 0 {
-			fmt.Printf("\nEmpty pod list - no pods in namespace \"%s\" with label \"%s\" - finishing\n", namespace, label)
+			fmt.Fprintf(os.Stderr, "\nEmpty pod list - no pods in namespace \"%s\" with label \"%s\" - finishing\n", namespace, label)
 			os.Exit(1)
 		} else {
-			fmt.Printf("\nFound pods in namespace \"%s\" with label \"%s\"\n", namespace, label)
+			fmt.Fprintf(os.Stderr, "\nFound pods in namespace \"%s\" with label \"%s\"\n", namespace, label)
 		}
 
 	}
@@ -170,12 +182,12 @@ func CollectKarpenterLogs(ctx context.Context, clientSet *kubernetes.Clientset, 
 	podItems := pods.Items
 	// for i := 0; i < len(podItems); i++ {
 	for i := range podItems {
-		fmt.Printf("Streaming logs from pod \"%s\" in namespace \"%s\"\n", podItems[i].Name, podItems[i].Namespace)
+		fmt.Fprintf(os.Stderr, "Streaming logs from pod \"%s\" in namespace \"%s\"\n", podItems[i].Name, podItems[i].Namespace)
 		podLogs, err := clientSet.CoreV1().Pods(namespace).GetLogs(podItems[i].Name, &v1.PodLogOptions{
 			Follow: true,
 		}).Stream(ctx)
 		if err != nil {
-			log.Println(err, "Failed to stream pod logs")
+			fmt.Fprintf(os.Stderr, "Failed to stream pod logs - %s\n", err.Error())
 			os.Exit(1)
 		}
 		defer podLogs.Close()
