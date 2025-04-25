@@ -37,7 +37,7 @@ or permanently
 export LP4K_CM_UPDATE_FREQ=10s
 ./lp4k
 ```
-* Note: **lp4k** will recognise new nodeclaims and populate its internal structures first when Karpenter controller logs contain a logline containing `"message":"created nodeclaim"`. That means after a Karpenter controller restart and a subsequent and required restart **lp4k** will not recognise already existing nodeclaims.
+* Note: **lp4k** will recognise new nodeclaims and populate its internal structures first when Karpenter controller logs show a logline containing `"message":"created nodeclaim"`. That means after a Karpenter controller restart and a subsequent and required restart **lp4k** will not recognise already existing nodeclaims.
 
 ----
 
