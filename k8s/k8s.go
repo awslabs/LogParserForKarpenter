@@ -81,20 +81,23 @@ func init() {
 			nodeclaimprint = true
 		}
 	}
-	if cmoverride {
-		// use unique ConfigMap name and override on every start
-		configmap = configmappref
-		fmt.Fprintf(os.Stderr, "Using pods from namespace \"%s\" with label \"%s\"\n", namespace, label)
-		fmt.Fprintf(os.Stderr, "Creating/overriding unique ConfigMap \"%s\" in namespace \"%s\" with updates every %s\n\n", configmap, namespace, cmupdfreq.String())
+	/*
+		// move this out because otherwise it will get called every time from main.go
+		if cmoverride {
+			// use unique ConfigMap name and override on every start
+			configmap = configmappref
+			fmt.Fprintf(os.Stderr, "Using pods from namespace \"%s\" with label \"%s\"\n", namespace, label)
+			fmt.Fprintf(os.Stderr, "Creating/overriding unique ConfigMap \"%s\" in namespace \"%s\" with updates every %s\n\n", configmap, namespace, cmupdfreq.String())
 
-	} else {
-		// construct ConfigMap name from time stamp - it probably contains non-DNS characters, so modify accordingly
-		configmap = fmt.Sprintf("%s-%s", configmappref, strings.Replace(time.Now().Format(time.RFC3339), ":", "", -1))
-		configmap, _, _ = strings.Cut(configmap, "+")
-		configmap = strings.Replace(configmap, "T", "-", -1)
-		fmt.Fprintf(os.Stderr, "Using pods from namespace \"%s\" with label \"%s\"\n", namespace, label)
-		fmt.Fprintf(os.Stderr, "Creating ConfigMap \"%s\" in namespace \"%s\" with updates every %s\n\n", configmap, namespace, cmupdfreq.String())
-	}
+		} else {
+			// construct ConfigMap name from time stamp - it probably contains non-DNS characters, so modify accordingly
+			configmap = fmt.Sprintf("%s-%s", configmappref, strings.Replace(time.Now().Format(time.RFC3339), ":", "", -1))
+			configmap, _, _ = strings.Cut(configmap, "+")
+			configmap = strings.Replace(configmap, "T", "-", -1)
+			fmt.Fprintf(os.Stderr, "Using pods from namespace \"%s\" with label \"%s\"\n", namespace, label)
+			fmt.Fprintf(os.Stderr, "Creating ConfigMap \"%s\" in namespace \"%s\" with updates every %s\n\n", configmap, namespace, cmupdfreq.String())
+		}
+	*/
 }
 
 func ConnectToK8s(kubeconfig *string) (context.Context, *kubernetes.Clientset) {
@@ -118,11 +121,23 @@ func ConnectToK8s(kubeconfig *string) (context.Context, *kubernetes.Clientset) {
 	return ctx, clientSet
 }
 
-// internal function to cretae and write ConfigMap with nodeclaims
+// internal function to create and write ConfigMap with nodeclaims
 func nodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, nodeclaimmap *map[string]lp4k.Nodeclaimstruct) {
 	// print current results every cmupdfreq seconds
 	// create ConfigMap in same namespace like Karpenter namespace
 	// ConfigMap data has to be map[string]string
+
+	if cmoverride {
+		// use unique ConfigMap name and override on every start
+		configmap = configmappref
+	} else {
+		// construct ConfigMap name from time stamp - it probably contains non-DNS characters, so modify accordingly
+		configmap = fmt.Sprintf("%s-%s", configmappref, strings.Replace(time.Now().Format(time.RFC3339), ":", "", -1))
+		configmap, _, _ = strings.Cut(configmap, "+")
+		configmap = strings.Replace(configmap, "T", "-", -1)
+	}
+
+	fmt.Fprintf(os.Stderr, "\nUsing ConfigMap \"%s\" in namespace \"%s\" with updates every %s\n", configmap, namespace, cmupdfreq.String())
 
 	cm := v1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
@@ -160,6 +175,7 @@ func nodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, n
 
 func CollectKarpenterLogs(ctx context.Context, clientSet *kubernetes.Clientset, nodeclaimmap *map[string]lp4k.Nodeclaimstruct, k8snodenamemap *map[string]string) {
 	// get the pods as ListItems
+	fmt.Fprintf(os.Stderr, "\nRetrieving pods from namespace \"%s\" with label \"%s\"\n", namespace, label)
 	pods, err := clientSet.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: label,
 	})

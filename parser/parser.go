@@ -43,16 +43,19 @@ func headerIndex() string {
 	headerSlice := strings.Split(header, ",")
 	for index, element := range headerSlice {
 		// Go slices start with index 0, but Linux utils like awk count from 1
-		headerSlice[index] = fmt.Sprintf("%s(%d)", element, index+1)
+		headerSlice[index] = fmt.Sprintf("%s[%d]", element, index+1)
 	}
 	return strings.Join(headerSlice, ",")
 }
 
+/*
 // internal helper function index header without nodeclaim
+// we do not put this into ConfigMap anymore
 func headerRemain() string {
 	headerSlice := strings.Split(headerIndex(), ",")
 	return strings.Join(headerSlice[1:], ",")
 }
+*/
 
 // internal helper function for scanner error handling
 func scannerErr(scanner *bufio.Scanner, stdin string) {
@@ -528,8 +531,9 @@ func ConvertResult(nodeclaimmap *map[string]Nodeclaimstruct) map[string]string {
 		s := sortResult(nodeclaimmap)
 
 		// add header
-		// Each key must consist of alphanumeric characters, '-', '_' or '.' so nodeclaim names must comply (add a check later)
-		keyvalueMap["nodeclaim"] = headerRemain()
+		// keyvalueMap["nodeclaim"] = headerRemain()
+
+		// Each key must consist of alphanumeric characters, '-', '_' or '.' so nodeclaim names must comply (add a check later
 		// add all information as key-value
 		for _, v := range s {
 			keyvalueMap[v.key] = fmt.Sprintf("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%.1f,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%.1f,%s,%.1f,%t,%t\n", v.value.createdtime, v.value.nodepool, v.value.instancetypes, v.value.launchedtime, v.value.providerid, v.value.instancetype, v.value.zone, v.value.capacitytype, v.value.registeredtime, v.value.k8snodename, v.value.initializedtime, v.value.nodereadytime, v.value.nodereadytimesec, v.value.disruptiontime, v.value.disruptionreason, v.value.disruptiondecision, v.value.disruptednodecount, v.value.replacementnodecount, v.value.disruptedpodcount, v.value.annotationtime, v.value.annotation, v.value.tainttime, v.value.taint, v.value.interruptiontime, v.value.interruptionkind, v.value.deletedtime, v.value.nodeterminationtime, v.value.nodeterminationtimesec, v.value.nodelifecycletime, v.value.nodelifecycletimesec, v.value.initialized, v.value.deleted)

@@ -72,11 +72,11 @@ The simplest way for analysis is to use the output and parse it using standard L
 ```console
 # indexed header
 $ head -1 sample-multi-file-klp-output.csv 
-nodeclaim(1),createdtime(2),nodepool(3),instancetypes(4),launchedtime(5),providerid(6),instancetype(7),zone(8),capacitytype(9),registeredtime(10),k8snodename(11),initializedtime(12),nodereadytime(13),nodereadytimesec(14),disruptiontime(15),disruptionreason(16),disruptiondecision(17),disruptednodecount(18),replacementnodecount(19),disruptedpodcount(20),annotationtime(21),annotation(22),tainttime(23),taint(24),interruptiontime(25),interruptionkind(26),deletedtime(27),nodeterminationtime(28),nodeterminationtimesec(29),nodelifecycletime(30),nodelifecycletimesec(31),initialized(32),deleted(33)
+nodeclaim[1],createdtime[2],nodepool[3],instancetypes[4],launchedtime[5],providerid[6],instancetype[7],zone[8],capacitytype[9],registeredtime[10],k8snodename[11],initializedtime[12],nodereadytime[13],nodereadytimesec[14],disruptiontime[15],disruptionreason[16],disruptiondecision[17],disruptednodecount[18],replacementnodecount[19],disruptedpodcount[20],annotationtime[21],annotation[22],tainttime[23],taint[24],interruptiontime[25],interruptionkind[26],deletedtime[27],nodeterminationtime[28],nodeterminationtimesec[29],nodelifecycletime[30],nodelifecycletimesec[31],initialized[32],deleted[33]
 
-# print nodeclaim(index/column=1), nodereadytime(13),nodereadytimesec(14)
+# print nodeclaim[index/column=1], nodereadytime[13],nodereadytimesec[14]
 $ cat sample-multi-file-klp-output.csv | awk -F  ',' '{print $1,$13,$14 }' | more
-nodeclaim(1) nodereadytime(13) nodereadytimesec(14)
+nodeclaim[1] nodereadytime[13] nodereadytimesec[14]
 spot-844xp 1m18.591s 78.6
 default-brbk4 0s 0.0
 default-lpc62 50.935s 50.9
