@@ -121,6 +121,25 @@ func ConnectToK8s(kubeconfig *string) (context.Context, *kubernetes.Clientset) {
 	return ctx, clientSet
 }
 
+// internal function to read nodeclaims from existing ConfigMap
+func readnodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, nodeclaimmap *map[string]lp4k.Nodeclaimstruct) {
+	// use unique ConfigMap name and override on every start
+	configmap = configmappref
+
+	fmt.Fprintf(os.Stderr, "\nRead existing ConfigMap \"%s\" in namespace \"%s\"\n", configmap, namespace)
+
+	//clientSet.CoreV1().ConfigMaps(namespace).Create(ctx, &cm, metav1.CreateOptions{})
+	cm, err := clientSet.CoreV1().ConfigMaps(namespace).Get(ctx, configmap, metav1.GetOptions{})
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to get ConfigMap \"%s\" in namespace \"%s\" - %s\n", configmap, namespace, err.Error())
+		os.Exit(1)
+	}
+
+	fmt.Printf("Read CM data\n")
+	lp4k.Populatenodeclaimmap(nodeclaimmap, cm.Data)
+}
+
 // internal function to create and write ConfigMap with nodeclaims
 func nodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, nodeclaimmap *map[string]lp4k.Nodeclaimstruct) {
 	// print current results every cmupdfreq seconds
@@ -212,6 +231,9 @@ func CollectKarpenterLogs(ctx context.Context, clientSet *kubernetes.Clientset, 
 		go lp4k.NonBlockingParser(bufio.NewScanner(podLogs), nodeclaimmap, k8snodenamemap, "STDIN", 0)
 	}
 	// create and update ConfigMap with nodeclaims
+	readnodeclaimsConfigMap(ctx, clientSet, nodeclaimmap)
+	os.Exit(1)
+
 	go nodeclaimsConfigMap(ctx, clientSet, nodeclaimmap)
 
 	// required to block until Ctrl-C

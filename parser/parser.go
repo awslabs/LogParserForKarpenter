@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -18,12 +19,46 @@ var header string = "nodeclaim,createdtime,nodepool,instancetypes,launchedtime,p
 
 // keep disruptednodecount, replacementnodecount, disruptedpodcount as strings because then we can have empty string ("") to differ from real values
 type Nodeclaimstruct struct {
-	createdtime, nodepool, instancetypes, launchedtime, providerid, instancetype, zone, capacitytype, registeredtime, k8snodename, initializedtime string
-	disruptiontime, disruptionreason, disruptiondecision, disruptednodecount, replacementnodecount, disruptedpodcount                              string
-	annotationtime, annotation, tainttime, taint, interruptiontime, interruptionkind, deletedtime                                                  string
-	nodereadytime, nodeterminationtime, nodelifecycletime                                                                                          time.Duration
-	nodereadytimesec, nodeterminationtimesec, nodelifecycletimesec                                                                                 float64
-	initialized, deleted                                                                                                                           bool
+	/*
+		createdtime, nodepool, instancetypes, launchedtime, providerid, instancetype, zone, capacitytype, registeredtime, k8snodename, initializedtime string
+		disruptiontime, disruptionreason, disruptiondecision, disruptednodecount, replacementnodecount, disruptedpodcount                              string
+		annotationtime, annotation, tainttime, taint, interruptiontime, interruptionkind, deletedtime                                                  string
+		nodereadytime, nodeterminationtime, nodelifecycletime                                                                                          time.Duration
+		nodereadytimesec, nodeterminationtimesec, nodelifecycletimesec                                                                                 float64
+		initialized, deleted
+	*/
+	Createdtime            string
+	Nodepool               string
+	Instancetypes          string
+	Launchedtime           string
+	Providerid             string
+	Instancetype           string
+	Zone                   string
+	Capacitytype           string
+	Registeredtime         string
+	K8snodename            string
+	Initializedtime        string
+	Nodereadytime          time.Duration
+	Nodereadytimesec       float64
+	Disruptiontime         string
+	Disruptionreason       string
+	Disruptiondecision     string
+	Disruptednodecount     string
+	Replacementnodecount   string
+	Disruptedpodcount      string
+	Annotationtime         string
+	Annotation             string
+	Tainttime              string
+	Taint                  string
+	Interruptiontime       string
+	Interruptionkind       string
+	Deletedtime            string
+	Nodeterminationtime    time.Duration
+	Nodeterminationtimesec float64
+	Nodelifecycletime      time.Duration
+	Nodelifecycletimesec   float64
+	Initialized            bool
+	Deleted                bool
 }
 
 // struct for further sorting of map
@@ -48,15 +83,6 @@ func headerIndex() string {
 	return strings.Join(headerSlice, ",")
 }
 
-/*
-// internal helper function index header without nodeclaim
-// we do not put this into ConfigMap anymore
-func headerRemain() string {
-	headerSlice := strings.Split(headerIndex(), ",")
-	return strings.Join(headerSlice[1:], ",")
-}
-*/
-
 // internal helper function for scanner error handling
 func scannerErr(scanner *bufio.Scanner, stdin string) {
 	// Ctrl-C will always lead to "http2: response body closed", so suppress this error
@@ -64,6 +90,32 @@ func scannerErr(scanner *bufio.Scanner, stdin string) {
 		if err.Error() != "http2: response body closed" {
 			fmt.Fprintf(os.Stderr, "Error \"%s\" parsing %s\n", err, stdin)
 		}
+	}
+}
+
+// internal helper function to populate nodeclaimmap from K8s ConfigMap data i.e. map[string]string
+// reflect package requires exported fields as well
+func Populatenodeclaimmap(nodeclaimmap *map[string]Nodeclaimstruct, cmdata map[string]string) {
+	var nodeclaimstruct Nodeclaimstruct
+
+	v := reflect.ValueOf(nodeclaimstruct)
+	t := reflect.TypeOf(nodeclaimstruct)
+
+	for i := range t.NumField() {
+		field := t.Field(i)
+		value := v.Field(i)
+		fmt.Printf("Field Name: %s, Field Type: %s, Field Value: %v\n",
+			field.Name, field.Type, value)
+	}
+
+	for key, val := range cmdata {
+		for ind, attr := range strings.SplitN(val, ",", -1) {
+			field := t.Field(ind)
+			//reflect.ValueOf(&nodeclaimstruct).Elem().FieldByName(field.Name).Set(reflect.ValueOf(field.Type))
+			fmt.Printf("nodeclaim (key): %s, ind: %d field name: %s field type: %s attr: %s\n", key, ind, field.Name, field.Type, attr)
+		}
+		fmt.Printf("nodeclaim (key): %s, value: %v\n", key, val)
+		//(*nodeclaimmap)[key] = nodeclaimstruct
 	}
 }
 
@@ -135,37 +187,37 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 				// we only create a new nodeclaimmap map entry when we capture a "created nodeclaim" log line
 				// add entry to hash map
 				(*nodeclaimmap)[nodeclaim] = Nodeclaimstruct{
-					createdtime:            createdtime,
-					nodepool:               nodepool,
-					instancetypes:          instancetypes,
-					launchedtime:           "",
-					providerid:             "",
-					instancetype:           "",
-					zone:                   "",
-					capacitytype:           "",
-					registeredtime:         "",
-					k8snodename:            "",
-					initializedtime:        "",
-					nodereadytime:          0,
-					nodereadytimesec:       0.0,
-					disruptiontime:         "",
-					disruptionreason:       "",
-					disruptiondecision:     "",
-					disruptednodecount:     "",
-					replacementnodecount:   "",
-					disruptedpodcount:      "",
-					annotationtime:         "",
-					annotation:             "",
-					tainttime:              "",
-					taint:                  "",
-					interruptionkind:       "",
-					deletedtime:            "",
-					nodeterminationtime:    0,
-					nodeterminationtimesec: 0.0,
-					nodelifecycletime:      0,
-					nodelifecycletimesec:   0.0,
-					initialized:            false,
-					deleted:                false,
+					Createdtime:            createdtime,
+					Nodepool:               nodepool,
+					Instancetypes:          instancetypes,
+					Launchedtime:           "",
+					Providerid:             "",
+					Instancetype:           "",
+					Zone:                   "",
+					Capacitytype:           "",
+					Registeredtime:         "",
+					K8snodename:            "",
+					Initializedtime:        "",
+					Nodereadytime:          0,
+					Nodereadytimesec:       0.0,
+					Disruptiontime:         "",
+					Disruptionreason:       "",
+					Disruptiondecision:     "",
+					Disruptednodecount:     "",
+					Replacementnodecount:   "",
+					Disruptedpodcount:      "",
+					Annotationtime:         "",
+					Annotation:             "",
+					Tainttime:              "",
+					Taint:                  "",
+					Interruptionkind:       "",
+					Deletedtime:            "",
+					Nodeterminationtime:    0,
+					Nodeterminationtimesec: 0.0,
+					Nodelifecycletime:      0,
+					Nodelifecycletimesec:   0.0,
+					Initialized:            false,
+					Deleted:                false,
 				}
 			} else {
 				fmt.Fprintf(os.Stderr, "Parsing error for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
@@ -184,16 +236,16 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 						for i, val := range matchslicesub[1:] {
 							switch i {
 							case 0:
-								entry.launchedtime = val
+								entry.Launchedtime = val
 							case 2:
 								awsproviderID := strings.Split(val, "/")
-								entry.providerid = awsproviderID[len(awsproviderID)-1]
+								entry.Providerid = awsproviderID[len(awsproviderID)-1]
 							case 3:
-								entry.instancetype = val
+								entry.Instancetype = val
 							case 4:
-								entry.zone = val
+								entry.Zone = val
 							case 5:
-								entry.capacitytype = val
+								entry.Capacitytype = val
 							}
 						}
 						(*nodeclaimmap)[nodeclaim] = entry
@@ -216,9 +268,9 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 						for i, val := range matchslicesub[1:] {
 							switch i {
 							case 0:
-								entry.registeredtime = val
+								entry.Registeredtime = val
 							case 2:
-								entry.k8snodename = val
+								entry.K8snodename = val
 								(*k8snodenamemap)[val] = nodeclaim
 							}
 						}
@@ -239,19 +291,19 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 				} else {
 					if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
 						//matchslicesub[0] always contains whole logline
-						if entry.initializedtime = matchslicesub[1]; entry.initializedtime != "" {
+						if entry.Initializedtime = matchslicesub[1]; entry.Initializedtime != "" {
 							// calculate node startup time
-							if entry.createdtime != "" {
-								t1, _ := datetime.Parse(entry.createdtime, time.UTC)
-								t2, _ := datetime.Parse(entry.initializedtime, time.UTC)
-								entry.nodereadytime = t2.Sub(t1)
-								entry.nodereadytimesec = entry.nodereadytime.Seconds()
+							if entry.Createdtime != "" {
+								t1, _ := datetime.Parse(entry.Createdtime, time.UTC)
+								t2, _ := datetime.Parse(entry.Initializedtime, time.UTC)
+								entry.Nodereadytime = t2.Sub(t1)
+								entry.Nodereadytimesec = entry.Nodereadytime.Seconds()
 							}
 						} else {
 							fmt.Fprintf(os.Stderr, "Parsing error empty \"initialized time\" for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
 						}
 						// we set nodeclaim to deleted even if we (for whatever reason) could not extract time
-						entry.initialized = true
+						entry.Initialized = true
 						(*nodeclaimmap)[nodeclaim] = entry
 					}
 				}
@@ -272,17 +324,17 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 							//fmt.Println("ind: ", i, "val: ", val)
 							switch i {
 							case 0:
-								entry.disruptiontime = val
+								entry.Disruptiontime = val
 							case 1:
-								entry.disruptionreason = val
+								entry.Disruptionreason = val
 							case 2:
-								entry.disruptiondecision = val
+								entry.Disruptiondecision = val
 							case 3:
-								entry.disruptednodecount = val
+								entry.Disruptednodecount = val
 							case 4:
-								entry.replacementnodecount = val
+								entry.Replacementnodecount = val
 							case 5:
-								entry.disruptedpodcount = val
+								entry.Disruptedpodcount = val
 								/*
 									if entry.disruptedpodcount, err = strconv.Atoi(val); err != nil {
 										entry.replacementnodecount = 0
@@ -308,9 +360,9 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 						for i, val := range matchslicesub[1:] {
 							switch i {
 							case 0:
-								entry.interruptiontime = val
+								entry.Interruptiontime = val
 							case 1:
-								entry.interruptionkind = val
+								entry.Interruptionkind = val
 							}
 							//fmt.Println("ind: ", i, "val: ", val)
 						}
@@ -333,13 +385,13 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 						for i, val := range matchslicesub[1:] {
 							switch i {
 							case 0:
-								entry.annotationtime = val
+								entry.Annotationtime = val
 							case 2:
 								// annotation key
-								entry.annotation = val
+								entry.Annotation = val
 							case 3:
 								// add taint value to already existing taint key
-								entry.annotation = fmt.Sprintf("%s:%s", entry.annotation, val)
+								entry.Annotation = fmt.Sprintf("%s:%s", entry.Annotation, val)
 							}
 							(*nodeclaimmap)[nodeclaim] = entry
 						}
@@ -362,17 +414,17 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 						for i, val := range matchslicesub[1:] {
 							switch i {
 							case 0:
-								entry.tainttime = val
+								entry.Tainttime = val
 							case 2:
 								// taint key
-								entry.taint = val
+								entry.Taint = val
 							case 3:
 								// add taint value to already existing taint key
 								// note: taint value might be an empty string, so we reverse our check logic here !!!
-								entry.taint = fmt.Sprintf("%s:%s", entry.taint, val)
+								entry.Taint = fmt.Sprintf("%s:%s", entry.Taint, val)
 							case 4:
 								// add taint effect to already existing taint key:value
-								entry.taint = fmt.Sprintf("%s:%s", entry.taint, val)
+								entry.Taint = fmt.Sprintf("%s:%s", entry.Taint, val)
 							}
 							if val == "" && i != 3 {
 								fmt.Fprintf(os.Stderr, "Parsing error empty \"K8s node name\" for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
@@ -395,17 +447,17 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 								for i, val := range matchslicesub[1:] {
 									switch i {
 									case 0:
-										entry.tainttime = val
+										entry.Tainttime = val
 									case 2:
 										// taint key
-										entry.taint = val
+										entry.Taint = val
 									case 3:
 										// add taint value to already existing taint key
 										// note: taint value might be an empty string
-										entry.taint = fmt.Sprintf("%s:%s", entry.taint, val)
+										entry.Taint = fmt.Sprintf("%s:%s", entry.Taint, val)
 									case 4:
 										// add taint effect to already existing taint key:value
-										entry.taint = fmt.Sprintf("%s:%s", entry.taint, val)
+										entry.Taint = fmt.Sprintf("%s:%s", entry.Taint, val)
 									}
 									(*nodeclaimmap)[nodeclaim] = entry
 								}
@@ -430,7 +482,7 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 									for i, val := range matchslicesub[1:] {
 										switch i {
 										case 0:
-											entry.tainttime = val
+											entry.Tainttime = val
 										}
 										(*nodeclaimmap)[nodeclaim] = entry
 									}
@@ -456,27 +508,27 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 				} else {
 					if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
 						//matchslicesub[0] always contains whole logline
-						if entry.deletedtime = matchslicesub[1]; entry.deletedtime != "" {
+						if entry.Deletedtime = matchslicesub[1]; entry.Deletedtime != "" {
 							// calculate node lifecycle time
-							if entry.createdtime != "" {
-								t1, _ := datetime.Parse(entry.createdtime, time.UTC)
-								t2, _ := datetime.Parse(entry.deletedtime, time.UTC)
-								entry.nodelifecycletime = t2.Sub(t1)
-								entry.nodelifecycletimesec = entry.nodelifecycletime.Seconds()
+							if entry.Createdtime != "" {
+								t1, _ := datetime.Parse(entry.Createdtime, time.UTC)
+								t2, _ := datetime.Parse(entry.Deletedtime, time.UTC)
+								entry.Nodelifecycletime = t2.Sub(t1)
+								entry.Nodelifecycletimesec = entry.Nodelifecycletime.Seconds()
 							}
 							// calculate node termination time (time it takes from lifecycle annotation to actual deletion)
 							// if this takes really long you might have some blocking PDB or taints
-							if entry.annotationtime != "" {
-								t1, _ := datetime.Parse(entry.annotationtime, time.UTC)
-								t2, _ := datetime.Parse(entry.deletedtime, time.UTC)
-								entry.nodeterminationtime = t2.Sub(t1)
-								entry.nodeterminationtimesec = entry.nodeterminationtime.Seconds()
+							if entry.Annotationtime != "" {
+								t1, _ := datetime.Parse(entry.Annotationtime, time.UTC)
+								t2, _ := datetime.Parse(entry.Deletedtime, time.UTC)
+								entry.Nodeterminationtime = t2.Sub(t1)
+								entry.Nodeterminationtimesec = entry.Nodeterminationtime.Seconds()
 							}
 						} else {
 							fmt.Fprintf(os.Stderr, "Parsing error empty \"deleted time\" for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
 						}
 						// we set nodeclaim to deleted even if we (for whatever reason) could not extract time
-						entry.deleted = true
+						entry.Deleted = true
 						(*nodeclaimmap)[nodeclaim] = entry
 					}
 				}
@@ -501,7 +553,7 @@ func sortResult(nodeclaimmap *map[string]Nodeclaimstruct) []keyvalue {
 	}
 
 	sort.SliceStable(s, func(i, j int) bool {
-		return s[i].value.createdtime < s[j].value.createdtime
+		return s[i].value.Createdtime < s[j].value.Createdtime
 	})
 
 	return s
@@ -517,7 +569,8 @@ func PrintSortedResult(nodeclaimmap *map[string]Nodeclaimstruct) {
 
 		for _, v := range s {
 			//fmt.Println(v.key, "->", v.value)
-			fmt.Printf("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%.1f,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%.1f,%s,%.1f,%t,%t\n", v.key, v.value.createdtime, v.value.nodepool, v.value.instancetypes, v.value.launchedtime, v.value.providerid, v.value.instancetype, v.value.zone, v.value.capacitytype, v.value.registeredtime, v.value.k8snodename, v.value.initializedtime, v.value.nodereadytime, v.value.nodereadytimesec, v.value.disruptiontime, v.value.disruptionreason, v.value.disruptiondecision, v.value.disruptednodecount, v.value.replacementnodecount, v.value.disruptedpodcount, v.value.annotationtime, v.value.annotation, v.value.tainttime, v.value.taint, v.value.interruptiontime, v.value.interruptionkind, v.value.deletedtime, v.value.nodeterminationtime, v.value.nodeterminationtimesec, v.value.nodelifecycletime, v.value.nodelifecycletimesec, v.value.initialized, v.value.deleted)
+			// probably use "reflection" here as well later !
+			fmt.Printf("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%.1f,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%.1f,%s,%.1f,%t,%t\n", v.key, v.value.Createdtime, v.value.Nodepool, v.value.Instancetypes, v.value.Launchedtime, v.value.Providerid, v.value.Instancetype, v.value.Zone, v.value.Capacitytype, v.value.Registeredtime, v.value.K8snodename, v.value.Initializedtime, v.value.Nodereadytime, v.value.Nodereadytimesec, v.value.Disruptiontime, v.value.Disruptionreason, v.value.Disruptiondecision, v.value.Disruptednodecount, v.value.Replacementnodecount, v.value.Disruptedpodcount, v.value.Annotationtime, v.value.Annotation, v.value.Tainttime, v.value.Taint, v.value.Interruptiontime, v.value.Interruptionkind, v.value.Deletedtime, v.value.Nodeterminationtime, v.value.Nodeterminationtimesec, v.value.Nodelifecycletime, v.value.Nodelifecycletimesec, v.value.Initialized, v.value.Deleted)
 		}
 	} else {
 		fmt.Fprintf(os.Stderr, "\nNo results - empty \"nodeclaim\" map\n")
@@ -530,13 +583,10 @@ func ConvertResult(nodeclaimmap *map[string]Nodeclaimstruct) map[string]string {
 	if len((*nodeclaimmap)) != 0 {
 		s := sortResult(nodeclaimmap)
 
-		// add header
-		// keyvalueMap["nodeclaim"] = headerRemain()
-
 		// Each key must consist of alphanumeric characters, '-', '_' or '.' so nodeclaim names must comply (add a check later
 		// add all information as key-value
 		for _, v := range s {
-			keyvalueMap[v.key] = fmt.Sprintf("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%.1f,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%.1f,%s,%.1f,%t,%t\n", v.value.createdtime, v.value.nodepool, v.value.instancetypes, v.value.launchedtime, v.value.providerid, v.value.instancetype, v.value.zone, v.value.capacitytype, v.value.registeredtime, v.value.k8snodename, v.value.initializedtime, v.value.nodereadytime, v.value.nodereadytimesec, v.value.disruptiontime, v.value.disruptionreason, v.value.disruptiondecision, v.value.disruptednodecount, v.value.replacementnodecount, v.value.disruptedpodcount, v.value.annotationtime, v.value.annotation, v.value.tainttime, v.value.taint, v.value.interruptiontime, v.value.interruptionkind, v.value.deletedtime, v.value.nodeterminationtime, v.value.nodeterminationtimesec, v.value.nodelifecycletime, v.value.nodelifecycletimesec, v.value.initialized, v.value.deleted)
+			keyvalueMap[v.key] = fmt.Sprintf("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%.1f,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%.1f,%s,%.1f,%t,%t\n", v.value.Createdtime, v.value.Nodepool, v.value.Instancetypes, v.value.Launchedtime, v.value.Providerid, v.value.Instancetype, v.value.Zone, v.value.Capacitytype, v.value.Registeredtime, v.value.K8snodename, v.value.Initializedtime, v.value.Nodereadytime, v.value.Nodereadytimesec, v.value.Disruptiontime, v.value.Disruptionreason, v.value.Disruptiondecision, v.value.Disruptednodecount, v.value.Replacementnodecount, v.value.Disruptedpodcount, v.value.Annotationtime, v.value.Annotation, v.value.Tainttime, v.value.Taint, v.value.Interruptiontime, v.value.Interruptionkind, v.value.Deletedtime, v.value.Nodeterminationtime, v.value.Nodeterminationtimesec, v.value.Nodelifecycletime, v.value.Nodelifecycletimesec, v.value.Initialized, v.value.Deleted)
 		}
 	} else {
 		fmt.Fprintf(os.Stderr, "\nNo results - empty \"nodeclaim\" map\n")
