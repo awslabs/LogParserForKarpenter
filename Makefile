@@ -25,6 +25,8 @@ ARCH?=$(shell go env GOHOSTARCH)
 BINARY=lp4k
 TOOLS=lp4kcm
 
+INSTALLDIR=/usr/local/bin
+
 #GO_SOURCES=go.mod go.sum $(shell find . -type f -name "*.go")
 GO_SOURCES=go.mod go.sum main.go ./k8s/k8s.go ./parser/parser.go
 TOOLS_SOURCES=go.mod go.sum ./tools/lp4kcm.go ./k8s/k8s.go ./parser/parser.go
@@ -64,7 +66,7 @@ bin/$(TOOLS): $(TOOLS_SOURCES) | bin
 
 .PHONY: install
 install: bin/$(BINARY) bin/$(TOOLS)
-	sudo cp bin/* /usr/local/bin
+	sudo cp bin/* $(INSTALLDIR)
 
 .PHONY: update
 update:
