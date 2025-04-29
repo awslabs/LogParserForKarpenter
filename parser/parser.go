@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -17,7 +18,7 @@ import (
 
 var header string = "nodeclaim,createdtime,nodepool,instancetypes,launchedtime,providerid,instancetype,zone,capacitytype,registeredtime,k8snodename,initializedtime,nodereadytime,nodereadytimesec,disruptiontime,disruptionreason,disruptiondecision,disruptednodecount,replacementnodecount,disruptedpodcount,annotationtime,annotation,tainttime,taint,interruptiontime,interruptionkind,deletedtime,nodeterminationtime,nodeterminationtimesec,nodelifecycletime,nodelifecycletimesec,initialized,deleted"
 
-// export all struct values because this is required for usage with packages like JSON encoding/decoding
+// export all struct values because this is required for usage with packages like JSON encoding/decoding or reflect
 // keep disruptednodecount, replacementnodecount, disruptedpodcount as strings because then we can have empty string ("") to differ from real values
 type Nodeclaimstruct struct {
 	Createdtime            string
@@ -85,37 +86,6 @@ func scannerErr(scanner *bufio.Scanner, stdin string) {
 		}
 	}
 }
-
-// reflect package requires exported fields as well
-// based on: https://www.slingacademy.com/article/reflection-with-structs-and-interfaces-in-go-for-dynamic-behavior/#advanced-example:-modifying-struct-fields
-/*
-func Populatenodeclaimmap(nodeclaimmap *map[string]Nodeclaimstruct, cmdata map[string]string) {
-	var nodeclaimstruct Nodeclaimstruct
-
-	v := reflect.ValueOf(nodeclaimstruct)
-	t := reflect.TypeOf(nodeclaimstruct)
-
-	for i := range t.NumField() {
-		field := t.Field(i)
-		value := v.Field(i)
-		fmt.Printf("Index: %d, Field Name: %s, Field Type: %s, Field Value: %v\n",
-			i, field.Name, field.Type, value)
-	}
-
-	for key, val := range cmdata {
-		// this converts every attribute to string, so we have to take care and somehow revert, otherwise reflect will panic
-		for ind, attr := range strings.SplitN(val, ",", -1) {
-			field := t.Field(ind)
-
-			fmt.Printf("nodeclaim (key): %s, ind: %d field name: %s field type: %s attr: %s\n", key, ind, field.Name, field.Type, attr)
-			// this still panic's
-			//reflect.ValueOf(&nodeclaimstruct).Elem().FieldByName(field.Name).Set(reflect.ValueOf(attr))
-		}
-		fmt.Printf("nodeclaim (key): %s, value: %v\n", key, val)
-		//(*nodeclaimmap)[key] = nodeclaimstruct
-	}
-}
-*/
 
 // internal helper function to populate nodeclaimmap from K8s ConfigMap data i.e. map[string]string
 func Populatenodeclaimmap(nodeclaimmap *map[string]Nodeclaimstruct, cmdata map[string]string) {
@@ -574,14 +544,22 @@ func PrintSortedResult(nodeclaimmap *map[string]Nodeclaimstruct) {
 	if len((*nodeclaimmap)) != 0 {
 		s := sortResult(nodeclaimmap)
 
-		// iterate over the slice to get the desired order of nodeclaim by createdtime
-		// offset 1 to make post-processing with tools like aws easier
+		// print header
 		fmt.Println(headerIndex())
 
+		// print nodeclaim with attributes
 		for _, v := range s {
-			//fmt.Println(v.key, "->", v.value)
-			// probably use "reflection" here as well later !
-			fmt.Printf("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%v,%.1f,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%.1f,%s,%.1f,%t,%t\n", v.key, v.value.Createdtime, v.value.Nodepool, v.value.Instancetypes, v.value.Launchedtime, v.value.Providerid, v.value.Instancetype, v.value.Zone, v.value.Capacitytype, v.value.Registeredtime, v.value.K8snodename, v.value.Initializedtime, v.value.Nodereadytime, v.value.Nodereadytimesec, v.value.Disruptiontime, v.value.Disruptionreason, v.value.Disruptiondecision, v.value.Disruptednodecount, v.value.Replacementnodecount, v.value.Disruptedpodcount, v.value.Annotationtime, v.value.Annotation, v.value.Tainttime, v.value.Taint, v.value.Interruptiontime, v.value.Interruptionkind, v.value.Deletedtime, v.value.Nodeterminationtime, v.value.Nodeterminationtimesec, v.value.Nodelifecycletime, v.value.Nodelifecycletimesec, v.value.Initialized, v.value.Deleted)
+			fmt.Print(v.key)
+
+			// loop over v.value, which is a Nodeclaimstruct, using reflect
+			reflectval := reflect.ValueOf(v.value)
+			values := make([]any, reflectval.NumField())
+
+			for i := range reflectval.NumField() {
+				values[i] = reflectval.Field(i).Interface()
+				fmt.Print(",", values[i])
+			}
+			fmt.Println()
 		}
 	} else {
 		fmt.Fprintf(os.Stderr, "\nNo results - empty \"nodeclaim\" map\n")
