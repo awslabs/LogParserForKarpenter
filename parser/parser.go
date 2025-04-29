@@ -4,9 +4,9 @@ package parser
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
-	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -27,7 +27,7 @@ type Nodeclaimstruct struct {
 		nodereadytimesec, nodeterminationtimesec, nodelifecycletimesec                                                                                 float64
 		initialized, deleted
 	*/
-	Createdtime            string
+	Createdtime            string // ind 0
 	Nodepool               string
 	Instancetypes          string
 	Launchedtime           string
@@ -38,8 +38,8 @@ type Nodeclaimstruct struct {
 	Registeredtime         string
 	K8snodename            string
 	Initializedtime        string
-	Nodereadytime          time.Duration
-	Nodereadytimesec       float64
+	Nodereadytime          time.Duration // ind 11
+	Nodereadytimesec       float64       // ind 12
 	Disruptiontime         string
 	Disruptionreason       string
 	Disruptiondecision     string
@@ -53,12 +53,12 @@ type Nodeclaimstruct struct {
 	Interruptiontime       string
 	Interruptionkind       string
 	Deletedtime            string
-	Nodeterminationtime    time.Duration
-	Nodeterminationtimesec float64
-	Nodelifecycletime      time.Duration
-	Nodelifecycletimesec   float64
-	Initialized            bool
-	Deleted                bool
+	Nodeterminationtime    time.Duration // ind 26
+	Nodeterminationtimesec float64       // ind 27
+	Nodelifecycletime      time.Duration // ind 28
+	Nodelifecycletimesec   float64       // ind 29
+	Initialized            bool          // ind 30
+	Deleted                bool          // ind 31
 }
 
 // struct for further sorting of map
@@ -93,8 +93,9 @@ func scannerErr(scanner *bufio.Scanner, stdin string) {
 	}
 }
 
-// internal helper function to populate nodeclaimmap from K8s ConfigMap data i.e. map[string]string
 // reflect package requires exported fields as well
+// based on: https://www.slingacademy.com/article/reflection-with-structs-and-interfaces-in-go-for-dynamic-behavior/#advanced-example:-modifying-struct-fields
+/*
 func Populatenodeclaimmap(nodeclaimmap *map[string]Nodeclaimstruct, cmdata map[string]string) {
 	var nodeclaimstruct Nodeclaimstruct
 
@@ -104,18 +105,35 @@ func Populatenodeclaimmap(nodeclaimmap *map[string]Nodeclaimstruct, cmdata map[s
 	for i := range t.NumField() {
 		field := t.Field(i)
 		value := v.Field(i)
-		fmt.Printf("Field Name: %s, Field Type: %s, Field Value: %v\n",
-			field.Name, field.Type, value)
+		fmt.Printf("Index: %d, Field Name: %s, Field Type: %s, Field Value: %v\n",
+			i, field.Name, field.Type, value)
 	}
 
 	for key, val := range cmdata {
+		// this converts every attribute to string, so we have to take care and somehow revert, otherwise reflect will panic
 		for ind, attr := range strings.SplitN(val, ",", -1) {
 			field := t.Field(ind)
-			//reflect.ValueOf(&nodeclaimstruct).Elem().FieldByName(field.Name).Set(reflect.ValueOf(field.Type))
+
 			fmt.Printf("nodeclaim (key): %s, ind: %d field name: %s field type: %s attr: %s\n", key, ind, field.Name, field.Type, attr)
+			// this still panic's
+			//reflect.ValueOf(&nodeclaimstruct).Elem().FieldByName(field.Name).Set(reflect.ValueOf(attr))
 		}
 		fmt.Printf("nodeclaim (key): %s, value: %v\n", key, val)
 		//(*nodeclaimmap)[key] = nodeclaimstruct
+	}
+}
+*/
+
+// internal helper function to populate nodeclaimmap from K8s ConfigMap data i.e. map[string]string
+func Populatenodeclaimmap(nodeclaimmap *map[string]Nodeclaimstruct, cmdata map[string]string) {
+	var nodeclaimstruct Nodeclaimstruct
+
+	for key, val := range cmdata {
+		err := json.Unmarshal([]byte(val), &nodeclaimstruct)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "JSON encoding error while encoding Nodeclaimstruct of nodeclaim \"%s\\n", key)
+		}
+		(*nodeclaimmap)[key] = nodeclaimstruct
 	}
 }
 
@@ -570,13 +588,14 @@ func PrintSortedResult(nodeclaimmap *map[string]Nodeclaimstruct) {
 		for _, v := range s {
 			//fmt.Println(v.key, "->", v.value)
 			// probably use "reflection" here as well later !
-			fmt.Printf("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%.1f,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%.1f,%s,%.1f,%t,%t\n", v.key, v.value.Createdtime, v.value.Nodepool, v.value.Instancetypes, v.value.Launchedtime, v.value.Providerid, v.value.Instancetype, v.value.Zone, v.value.Capacitytype, v.value.Registeredtime, v.value.K8snodename, v.value.Initializedtime, v.value.Nodereadytime, v.value.Nodereadytimesec, v.value.Disruptiontime, v.value.Disruptionreason, v.value.Disruptiondecision, v.value.Disruptednodecount, v.value.Replacementnodecount, v.value.Disruptedpodcount, v.value.Annotationtime, v.value.Annotation, v.value.Tainttime, v.value.Taint, v.value.Interruptiontime, v.value.Interruptionkind, v.value.Deletedtime, v.value.Nodeterminationtime, v.value.Nodeterminationtimesec, v.value.Nodelifecycletime, v.value.Nodelifecycletimesec, v.value.Initialized, v.value.Deleted)
+			fmt.Printf("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%v,%.1f,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%.1f,%s,%.1f,%t,%t\n", v.key, v.value.Createdtime, v.value.Nodepool, v.value.Instancetypes, v.value.Launchedtime, v.value.Providerid, v.value.Instancetype, v.value.Zone, v.value.Capacitytype, v.value.Registeredtime, v.value.K8snodename, v.value.Initializedtime, v.value.Nodereadytime, v.value.Nodereadytimesec, v.value.Disruptiontime, v.value.Disruptionreason, v.value.Disruptiondecision, v.value.Disruptednodecount, v.value.Replacementnodecount, v.value.Disruptedpodcount, v.value.Annotationtime, v.value.Annotation, v.value.Tainttime, v.value.Taint, v.value.Interruptiontime, v.value.Interruptionkind, v.value.Deletedtime, v.value.Nodeterminationtime, v.value.Nodeterminationtimesec, v.value.Nodelifecycletime, v.value.Nodelifecycletimesec, v.value.Initialized, v.value.Deleted)
 		}
 	} else {
 		fmt.Fprintf(os.Stderr, "\nNo results - empty \"nodeclaim\" map\n")
 	}
 }
 
+// used by k8s package to create ConfigMap data
 func ConvertResult(nodeclaimmap *map[string]Nodeclaimstruct) map[string]string {
 	keyvalueMap := make(map[string]string)
 
@@ -586,7 +605,11 @@ func ConvertResult(nodeclaimmap *map[string]Nodeclaimstruct) map[string]string {
 		// Each key must consist of alphanumeric characters, '-', '_' or '.' so nodeclaim names must comply (add a check later
 		// add all information as key-value
 		for _, v := range s {
-			keyvalueMap[v.key] = fmt.Sprintf("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%.1f,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%.1f,%s,%.1f,%t,%t\n", v.value.Createdtime, v.value.Nodepool, v.value.Instancetypes, v.value.Launchedtime, v.value.Providerid, v.value.Instancetype, v.value.Zone, v.value.Capacitytype, v.value.Registeredtime, v.value.K8snodename, v.value.Initializedtime, v.value.Nodereadytime, v.value.Nodereadytimesec, v.value.Disruptiontime, v.value.Disruptionreason, v.value.Disruptiondecision, v.value.Disruptednodecount, v.value.Replacementnodecount, v.value.Disruptedpodcount, v.value.Annotationtime, v.value.Annotation, v.value.Tainttime, v.value.Taint, v.value.Interruptiontime, v.value.Interruptionkind, v.value.Deletedtime, v.value.Nodeterminationtime, v.value.Nodeterminationtimesec, v.value.Nodelifecycletime, v.value.Nodelifecycletimesec, v.value.Initialized, v.value.Deleted)
+			jsondata, err := json.Marshal(v.value)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "JSON encoding error while encoding Nodeclaimstruct of nodeclaim \"%s\\n", v.key)
+			}
+			keyvalueMap[v.key] = string(jsondata)
 		}
 	} else {
 		fmt.Fprintf(os.Stderr, "\nNo results - empty \"nodeclaim\" map\n")

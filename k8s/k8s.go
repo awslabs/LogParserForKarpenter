@@ -230,10 +230,13 @@ func CollectKarpenterLogs(ctx context.Context, clientSet *kubernetes.Clientset, 
 
 		go lp4k.NonBlockingParser(bufio.NewScanner(podLogs), nodeclaimmap, k8snodenamemap, "STDIN", 0)
 	}
-	// create and update ConfigMap with nodeclaims
-	readnodeclaimsConfigMap(ctx, clientSet, nodeclaimmap)
-	os.Exit(1)
 
+	// read already existing ConfigMap in override mode only
+	if cmoverride {
+		readnodeclaimsConfigMap(ctx, clientSet, nodeclaimmap)
+	}
+
+	// create and update ConfigMap with nodeclaims
 	go nodeclaimsConfigMap(ctx, clientSet, nodeclaimmap)
 
 	// required to block until Ctrl-C
