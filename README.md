@@ -28,14 +28,16 @@ K8s handling can be configured using the following OS environment variables:
 | LP4K_CM_OVERRIDE | "false" | determines, if ConfigMap will just use prefix and will be overriden upon every start of lp4k
 | LP4K_NODECLAIM_PRINT | "true" | print nodeclaim information every KARPENTER_CM_UPDATE_FREQ to STDOUT
 
+\* Note: In mode `LP4K_CM_OVERRIDE=true` **lp4k** will read existing nodeclaim data from ConfigMap specified by LP4K_CM_PREFIX
+
 Use:
 ```bash
-LP4K_CM_UPDATE_FREQ=10s ./lp4k
+LP4K_CM_UPDATE_FREQ=10s ./bin/lp4k
 ```
 or permanently
 ```bash
 export LP4K_CM_UPDATE_FREQ=10s
-./lp4k
+./bin/lp4k
 ```
 * Note: **lp4k** will recognise new nodeclaims and populate its internal structures first when Karpenter controller logs show a logline containing `"message":"created nodeclaim"`. That means after a Karpenter controller restart and a subsequent and required restart **lp4k** will not recognise already existing nodeclaims.
 
@@ -51,11 +53,11 @@ A binary `lp4k` for your OS and platform is build in directory `bin`.
 
 Then run it like:
 ```bash
-./lp4k sample-input.txt
+./bin/lp4k sample-input.txt
 ```
 or
 ```bash
-./lp4k <Karpenter log output file 1> [... <Karpenter log output file n>]
+./bin/lp4k <Karpenter log output file 1> [... <Karpenter log output file n>]
 ```
 or
 ```bash
@@ -63,9 +65,24 @@ kubectl logs -n karpenter -l=app.kubernetes.io/name=karpenter [-f] | ./lp4k
 ```
 or for attaching to K8s/EKS cluster in current KUBECONFIG context
 ```bash
-./lp4k
+./bin/lp4k
 ```
 The sample output file [sample-multi-file-klp-output.csv](sample-multi-file-klp-output.csv) shows all exposed nodeclaim information and can be used as a sample starter to build analysis on top of it.
+
+### lp4kcm
+
+**lp4kcm** is a helper tool to display **lp4k** ConfigMap data in same CSV format.
+
+Just run:
+```bash
+make tools
+```
+A binary `lp4kcm` for your OS and platform is build in directory `bin`.
+
+Then run it like:
+```bash
+./bin/lp4k <lp4k ConfigMap name 1> [... <lp4k ConfigMap name n>]
+```
 
 ## Analyse LogParserForKarpenter output
 The simplest way for analysis is to use the output and parse it using standard Linux utilities like awk, cut and grep.
@@ -94,7 +111,7 @@ $ cat sample-multi-file-klp-output.csv | awk -F  ',' '/local-storage-raid-al2023
 local-storage-raid-al2023-nccxt 1m8.447s 68.4
 
 # combine directly with lp4k and raw Karpenter controller logs
-$ ./lp4k karpenter-log-0.37.7.txt | awk -F  ',' '{ print $1,$13,$14 }'
+$ ./bin//lp4k karpenter-log-0.37.7.txt | awk -F  ',' '{ print $1,$13,$14 }'
 nodeclaim(1) nodereadytime(13) nodereadytimesec(14)
 default-brbk4 0s 0.0
 default-lpc62 50.935s 50.9
