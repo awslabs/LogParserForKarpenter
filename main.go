@@ -82,7 +82,7 @@ func main() {
 			// main parsing logic
 			lp4k.NonBlockingParser(bufio.NewScanner(file), nodeclaimmap, k8snodenamemap, filename, 0)
 
-			fmt.Fprintf(os.Stderr, "Finished parsing input file %s\n", filename)
+			fmt.Fprintf(os.Stderr, "Finished parsing input file %s\n\n", filename)
 		}
 		// print nodeclaim output to STDOUT
 		lp4k.PrintSortedResult(nodeclaimmap)

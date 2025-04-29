@@ -16,7 +16,8 @@ import (
 	"github.com/nav-inc/datetime"
 )
 
-var header string = "nodeclaim,createdtime,nodepool,instancetypes,launchedtime,providerid,instancetype,zone,capacitytype,registeredtime,k8snodename,initializedtime,nodereadytime,nodereadytimesec,disruptiontime,disruptionreason,disruptiondecision,disruptednodecount,replacementnodecount,disruptedpodcount,annotationtime,annotation,tainttime,taint,interruptiontime,interruptionkind,deletedtime,nodeterminationtime,nodeterminationtimesec,nodelifecycletime,nodelifecycletimesec,initialized,deleted"
+// var header string = "nodeclaim,createdtime,nodepool,instancetypes,launchedtime,providerid,instancetype,zone,capacitytype,registeredtime,k8snodename,initializedtime,nodereadytime,nodereadytimesec,disruptiontime,disruptionreason,disruptiondecision,disruptednodecount,replacementnodecount,disruptedpodcount,annotationtime,annotation,tainttime,taint,interruptiontime,interruptionkind,deletedtime,nodeterminationtime,nodeterminationtimesec,nodelifecycletime,nodelifecycletimesec,initialized,deleted"
+var header string
 
 // export all struct values because this is required for usage with packages like JSON encoding/decoding or reflect
 // keep disruptednodecount, replacementnodecount, disruptedpodcount as strings because then we can have empty string ("") to differ from real values
@@ -61,20 +62,26 @@ type keyvalue struct {
 	value Nodeclaimstruct
 }
 
+// internal helper function to set header based on Nodeclaimstruct
+func init() {
+	var nodeclaimstruct Nodeclaimstruct
+
+	// loop over v.value, which is a Nodeclaimstruct, using reflect
+	reflecttype := reflect.TypeOf(nodeclaimstruct)
+
+	// Go slices start with index 0, but Linux utils like awk count from 1
+	header = "Nodeclaim[1]"
+
+	for i := range reflecttype.NumField() {
+		//header = header + "," + reflecttype.Field(i).Name + "[" + strconv.Itoa(i+2) + "]"
+		header = fmt.Sprintf("%s,%s[%d]", header, reflecttype.Field(i).Name, i+2)
+	}
+}
+
 // internal helper function for pattern matching
 func matchPattern(pattern, logline string) []string {
 	re := regexp.MustCompile(pattern)
 	return re.FindStringSubmatch(logline)
-}
-
-// internal helper function for header indexing
-func headerIndex() string {
-	headerSlice := strings.Split(header, ",")
-	for index, element := range headerSlice {
-		// Go slices start with index 0, but Linux utils like awk count from 1
-		headerSlice[index] = fmt.Sprintf("%s[%d]", element, index+1)
-	}
-	return strings.Join(headerSlice, ",")
 }
 
 // internal helper function for scanner error handling
@@ -545,7 +552,7 @@ func PrintSortedResult(nodeclaimmap *map[string]Nodeclaimstruct) {
 		s := sortResult(nodeclaimmap)
 
 		// print header
-		fmt.Println(headerIndex())
+		fmt.Println(header)
 
 		// print nodeclaim with attributes
 		for _, v := range s {
@@ -553,11 +560,9 @@ func PrintSortedResult(nodeclaimmap *map[string]Nodeclaimstruct) {
 
 			// loop over v.value, which is a Nodeclaimstruct, using reflect
 			reflectval := reflect.ValueOf(v.value)
-			values := make([]any, reflectval.NumField())
 
 			for i := range reflectval.NumField() {
-				values[i] = reflectval.Field(i).Interface()
-				fmt.Print(",", values[i])
+				fmt.Print(",", reflectval.Field(i).Interface())
 			}
 			fmt.Println()
 		}
