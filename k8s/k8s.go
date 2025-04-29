@@ -36,6 +36,7 @@ var cmupdfreq time.Duration
 var cmoverride, nodeclaimprint bool
 
 // internal helper function to determine Karpenter namespace and label via OS environment, if not set use defaults
+// handle ConfigMap override logic as well
 func init() {
 	var err error
 
