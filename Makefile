@@ -26,8 +26,11 @@ OS?=$(shell go env GOHOSTOS)
 ARCH?=$(shell go env GOHOSTARCH)
 
 BINARY=lp4k
+TOOLS=lp4kcm
 
-GO_SOURCES=go.mod go.sum $(shell find . -type f -name "*.go")
+#GO_SOURCES=go.mod go.sum $(shell find . -type f -name "*.go")
+GO_SOURCES=go.mod go.sum main.go ./k8s/k8s.go ./parser/parser.go
+TOOLS_SOURCES=go.mod go.sum  ./tools/lp4kcm.go ./k8s/k8s.go ./parser/parser.go
 
 ALL_ARCH_linux?=amd64 arm64
 
@@ -52,5 +55,9 @@ bin:
 
 bin/$(BINARY): $(GO_SOURCES) | bin
 	CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) go build -mod=readonly -ldflags ${LDFLAGS} -o $@ .
+
+tools: $(TOOLS_SOURCES) | bin
+	CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) go build -mod=readonly -ldflags ${LDFLAGS} -o bin/lp4kcm ./tools
+
 
 

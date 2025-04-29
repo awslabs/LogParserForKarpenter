@@ -17,17 +17,10 @@ import (
 
 var header string = "nodeclaim,createdtime,nodepool,instancetypes,launchedtime,providerid,instancetype,zone,capacitytype,registeredtime,k8snodename,initializedtime,nodereadytime,nodereadytimesec,disruptiontime,disruptionreason,disruptiondecision,disruptednodecount,replacementnodecount,disruptedpodcount,annotationtime,annotation,tainttime,taint,interruptiontime,interruptionkind,deletedtime,nodeterminationtime,nodeterminationtimesec,nodelifecycletime,nodelifecycletimesec,initialized,deleted"
 
+// export all struct values because this is required for usage with packages like JSON encoding/decoding
 // keep disruptednodecount, replacementnodecount, disruptedpodcount as strings because then we can have empty string ("") to differ from real values
 type Nodeclaimstruct struct {
-	/*
-		createdtime, nodepool, instancetypes, launchedtime, providerid, instancetype, zone, capacitytype, registeredtime, k8snodename, initializedtime string
-		disruptiontime, disruptionreason, disruptiondecision, disruptednodecount, replacementnodecount, disruptedpodcount                              string
-		annotationtime, annotation, tainttime, taint, interruptiontime, interruptionkind, deletedtime                                                  string
-		nodereadytime, nodeterminationtime, nodelifecycletime                                                                                          time.Duration
-		nodereadytimesec, nodeterminationtimesec, nodelifecycletimesec                                                                                 float64
-		initialized, deleted
-	*/
-	Createdtime            string // ind 0
+	Createdtime            string
 	Nodepool               string
 	Instancetypes          string
 	Launchedtime           string
@@ -38,8 +31,8 @@ type Nodeclaimstruct struct {
 	Registeredtime         string
 	K8snodename            string
 	Initializedtime        string
-	Nodereadytime          time.Duration // ind 11
-	Nodereadytimesec       float64       // ind 12
+	Nodereadytime          time.Duration
+	Nodereadytimesec       float64
 	Disruptiontime         string
 	Disruptionreason       string
 	Disruptiondecision     string
@@ -53,12 +46,12 @@ type Nodeclaimstruct struct {
 	Interruptiontime       string
 	Interruptionkind       string
 	Deletedtime            string
-	Nodeterminationtime    time.Duration // ind 26
-	Nodeterminationtimesec float64       // ind 27
-	Nodelifecycletime      time.Duration // ind 28
-	Nodelifecycletimesec   float64       // ind 29
-	Initialized            bool          // ind 30
-	Deleted                bool          // ind 31
+	Nodeterminationtime    time.Duration
+	Nodeterminationtimesec float64
+	Nodelifecycletime      time.Duration
+	Nodelifecycletimesec   float64
+	Initialized            bool
+	Deleted                bool
 }
 
 // struct for further sorting of map

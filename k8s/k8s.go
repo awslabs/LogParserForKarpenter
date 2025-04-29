@@ -6,7 +6,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"strconv"
@@ -121,10 +120,10 @@ func ConnectToK8s(kubeconfig *string) (context.Context, *kubernetes.Clientset) {
 	return ctx, clientSet
 }
 
-// internal function to read nodeclaims from existing ConfigMap
-func readnodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, nodeclaimmap *map[string]lp4k.Nodeclaimstruct) {
+// function to read nodeclaims from existing ConfigMap, required by tool lp4kcm as well!
+func ReadnodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, configmap string, nodeclaimmap *map[string]lp4k.Nodeclaimstruct) {
 	// use unique ConfigMap name and override on every start
-	configmap = configmappref
+	//configmap = configmappref
 
 	fmt.Fprintf(os.Stderr, "\nRead existing ConfigMap \"%s\" in namespace \"%s\"\n", configmap, namespace)
 
@@ -136,7 +135,7 @@ func readnodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientse
 		os.Exit(1)
 	}
 
-	fmt.Printf("Read CM data\n")
+	// populate nodeclaimmap from ConfigMap data
 	lp4k.Populatenodeclaimmap(nodeclaimmap, cm.Data)
 }
 
@@ -199,7 +198,7 @@ func CollectKarpenterLogs(ctx context.Context, clientSet *kubernetes.Clientset, 
 		LabelSelector: label,
 	})
 	if err != nil {
-		log.Println(err, "Failed to get pods")
+		fmt.Fprintf(os.Stderr, "\nFailed to get pods\n")
 		os.Exit(1)
 	} else {
 		if len(pods.Items) == 0 {
@@ -233,7 +232,7 @@ func CollectKarpenterLogs(ctx context.Context, clientSet *kubernetes.Clientset, 
 
 	// read already existing ConfigMap in override mode only
 	if cmoverride {
-		readnodeclaimsConfigMap(ctx, clientSet, nodeclaimmap)
+		ReadnodeclaimsConfigMap(ctx, clientSet, configmappref, nodeclaimmap)
 	}
 
 	// create and update ConfigMap with nodeclaims
