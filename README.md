@@ -39,8 +39,6 @@ or permanently
 export LP4K_CM_UPDATE_FREQ=10s
 ./bin/lp4k
 ```
-* Note: **lp4k** will recognise new nodeclaims and populate its internal structures first when Karpenter controller logs show a logline containing `"message":"created nodeclaim"`. That means after a Karpenter controller restart and a subsequent and required restart **lp4k** will not recognise already existing nodeclaims.
-
 ----
 
 ## To start using LogParserForKarpenter
@@ -68,6 +66,7 @@ or for attaching to K8s/EKS cluster in current KUBECONFIG context
 ./bin/lp4k
 ```
 The sample output file [sample-multi-file-klp-output.csv](sample-multi-file-klp-output.csv) shows all exposed nodeclaim information and can be used as a sample starter to build analysis on top of it.
+* Note: **lp4k** will recognise new nodeclaims and populate its internal structures first when Karpenter controller logs show a logline containing `"message":"created nodeclaim"`. That means after a Karpenter controller restart and a subsequent and required restart **lp4k** will not recognise already existing nodeclaims and shows `No results - empty "nodeclaim" map`
 
 ### lp4kcm
 
