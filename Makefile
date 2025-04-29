@@ -53,11 +53,18 @@ bin:
 bin/$(BINARY): $(GO_SOURCES) | bin
 	CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) go build -mod=readonly -ldflags ${LDFLAGS} -o $@ .
 
+.PHONY: all
+all: bin/$(BINARY) bin/$(TOOLS)
+
 .PHONY: tools
 tools: bin/$(TOOLS)
 
 bin/$(TOOLS): $(TOOLS_SOURCES) | bin
-    CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) go build -mod=readonly -ldflags ${LDFLAGS} -o $@  ./tools/
+	CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) go build -mod=readonly -ldflags ${LDFLAGS} -o $@  ./tools/
+
+.PHONY: install
+install: bin/$(BINARY) bin/$(TOOLS)
+	sudo cp bin/* /usr/local/bin
 
 .PHONY: update
 update:
