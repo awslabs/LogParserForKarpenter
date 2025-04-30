@@ -27,9 +27,10 @@ TOOLS=lp4kcm
 
 INSTALLDIR=/usr/local/bin
 
-#GO_SOURCES=go.mod go.sum $(shell find . -type f -name "*.go")
-GO_SOURCES=go.mod go.sum main.go ./k8s/k8s.go ./parser/parser.go
-TOOLS_SOURCES=go.mod go.sum ./tools/lp4kcm.go ./k8s/k8s.go ./parser/parser.go
+#GO_SOURCES=go.mod go.sum main.go ./k8s/k8s.go ./parser/parser.go
+GO_SOURCES=go.mod go.sum $(shell find . -type d -name tools -prune -o -name "*.go" -print)
+#TOOLS_SOURCES=go.mod go.sum ./tools/lp4kcm.go ./k8s/k8s.go ./parser/parser.go
+TOOLS_SOURCES=go.mod go.sum $(shell find . -type f -name main.go -prune -o -name "*.go" -print)
 
 ALL_ARCH_linux?=amd64 arm64
 
