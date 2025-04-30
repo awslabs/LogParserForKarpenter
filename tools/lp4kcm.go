@@ -47,7 +47,7 @@ func main() {
 
 		fmt.Fprintf(os.Stderr, "Finished parsing ConfigMap %s\n", cmname)
 	}
-	fmt.Println()
+	fmt.Fprintf(os.Stderr, "\n")
 	// print nodeclaim output to STDOUT
 	lp4k.PrintSortedResult(nodeclaimmap)
 }
