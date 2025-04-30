@@ -59,7 +59,7 @@ or
 ```
 or
 ```bash
-kubectl logs -n karpenter -l=app.kubernetes.io/name=karpenter [-f] | ./lp4k
+kubectl logs -n karpenter karpenter deployments/karpenter --all-pods=true [-f] | ./lp4k
 ```
 or for attaching to K8s/EKS cluster in current KUBECONFIG context
 ```bash
@@ -110,7 +110,7 @@ $ cat sample-multi-file-klp-output.csv | awk -F  ',' '/local-storage-raid-al2023
 local-storage-raid-al2023-nccxt 1m8.447s 68.4
 
 # combine directly with lp4k and raw Karpenter controller logs
-$ ./bin//lp4k karpenter-log-0.37.7.txt | awk -F  ',' '{ print $1,$13,$14 }'
+$ ./bin/lp4k karpenter-log-0.37.7.txt | awk -F  ',' '{ print $1,$13,$14 }'
 nodeclaim(1) nodereadytime(13) nodereadytimesec(14)
 default-brbk4 0s 0.0
 default-lpc62 50.935s 50.9
