@@ -59,7 +59,7 @@ or
 ```
 or
 ```bash
-kubectl logs -n karpenter karpenter deployments/karpenter --all-pods=true [-f] | ./lp4k
+kubectl logs -n kube-system deployments/karpenter --all-pods=true [-f] | ./lp4k
 ```
 or for attaching to K8s/EKS cluster in current KUBECONFIG context
 ```bash
