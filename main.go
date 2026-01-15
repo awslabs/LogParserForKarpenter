@@ -4,6 +4,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -16,11 +17,18 @@ import (
 	termutil "github.com/andrew-d/go-termutil"
 	"github.com/awslabs/LogParserForKarpenter/k8s"
 	lp4k "github.com/awslabs/LogParserForKarpenter/parser"
+	"github.com/awslabs/LogParserForKarpenter/s3"
 
 	"k8s.io/client-go/util/homedir"
 )
 
 func main() {
+	if s3.IsEnabled() {
+		fmt.Fprintln(os.Stderr, "S3 upload enabled")
+	} else {
+		fmt.Fprintln(os.Stderr, "S3 upload disabled (LP4K_S3_BUCKET not set)")
+	}
+
 	var filename string = "STDIN"
 	var nodeclaimmap *map[string]lp4k.Nodeclaimstruct
 	// helper map of k8snodename to nodeclaim
@@ -65,6 +73,16 @@ func main() {
 
 			// print nodeclaim output to STDOUT
 			lp4k.PrintSortedResult(nodeclaimmap)
+
+			// upload to S3 if configured
+			if s3.IsEnabled() {
+				ctx := context.Background()
+				if err := s3.UploadToS3(ctx, nodeclaimmap); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: Failed to upload to S3: %v\n", err)
+				}
+			}else{
+				fmt.Fprintf(os.Stderr, "S3 upload not configured - skipping upload\n")
+			}
 		}
 	} else {
 		for _, arg := range os.Args[1:] {
@@ -85,5 +103,13 @@ func main() {
 		}
 		// print nodeclaim output to STDOUT
 		lp4k.PrintSortedResult(nodeclaimmap)
+
+		// upload to S3 if configured
+		if s3.IsEnabled() {
+			ctx := context.Background()
+			if err := s3.UploadToS3(ctx, nodeclaimmap); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Failed to upload to S3: %v\n", err)
+			}
+		}
 	}
 }
