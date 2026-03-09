@@ -1,6 +1,6 @@
 module github.com/awslabs/LogParserForKarpenter
 
-go 1.24.2
+go 1.26.1
 
 require (
 	github.com/andrew-d/go-termutil v0.0.0-20150726205930-009166a695a2
