@@ -39,7 +39,7 @@ var cmoverride, nodeclaimprint bool
 // handle ConfigMap override logic as well
 func init() {
 	var err error
-	namespace = getEnvOrDefault(namespaceEnv, "karpenter")
+	namespace = getEnvOrDefault(namespaceEnv, "kube-system")
 	label = getEnvOrDefault(labelEnv, "app.kubernetes.io/name=karpenter")
 	cmupdfreqstr := getEnvOrDefault(updateEnv, "30s")
 	cmupdfreq, err = time.ParseDuration(cmupdfreqstr)

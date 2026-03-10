@@ -22,7 +22,7 @@ K8s handling can be configured using the following OS environment variables:
 
 | Environment variable      | Default value     | Description
 | ------------- | ------------- | ------------- |
-| LP4K_KARPENTER_NAMESPACE | "karpenter" | K8s namespace where Karpenter controller is running
+| LP4K_KARPENTER_NAMESPACE | "kube-system" | K8s namespace where Karpenter controller is running
 | LP4K_KARPENTER_LABEL | "app.kubernetes.io/name=karpenter" | Karpenter controller K8s pod labels
 | LP4K_CM_UPDATE_FREQ | "30s" | update frequency of ConfigMap and STDOUT if enabled (default), must be valid Go time.Duration string like "30s" or 2m30s"
 | LP4K_CM_PREFIX | "lp4k-cm" | nodeclaim ConfigMap prefix, if KARPENTER_LP4K_CM_OVERRIDE=false or ConfigMap name, if KARPENTER_LP4K_CM_OVERRIDE=true
