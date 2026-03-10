@@ -101,24 +101,18 @@ func init() {
 }
 
 func ConnectToK8s(kubeconfig *string) (context.Context, *kubernetes.Clientset) {
-	// use the current context in kubeconfig
-	ctx := context.TODO()
 	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to build config from flags - %s\n", err.Error())
 		os.Exit(1)
 	}
-
-	// create the K8s clientset
 	clientSet, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create clientset from the given config - %s\n", err.Error())
 		os.Exit(1)
-	} else {
-		fmt.Fprintf(os.Stderr, "Connected to K8s cluster\n")
 	}
-
-	return ctx, clientSet
+	fmt.Fprintf(os.Stderr, "Connected to K8s cluster\n")
+	return context.Background(), clientSet
 }
 
 // function to read nodeclaims from existing ConfigMap, required by tool lp4kcm as well!

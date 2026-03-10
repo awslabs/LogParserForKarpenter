@@ -16,6 +16,23 @@ import (
 // var header string = "nodeclaim,createdtime,nodepool,instancetypes,launchedtime,providerid,instancetype,zone,capacitytype,registeredtime,k8snodename,initializedtime,nodereadytime,nodereadytimesec,disruptiontime,disruptionreason,disruptiondecision,disruptednodecount,replacementnodecount,disruptedpodcount,annotationtime,annotation,tainttime,taint,interruptiontime,interruptionkind,deletedtime,nodeterminationtime,nodeterminationtimesec,nodelifecycletime,nodelifecycletimesec,initialized,deleted"
 var header string
 
+var (
+	replacer                 = strings.NewReplacer(", ", "|", " ", "", "(s)", "s")
+	messagePattern           = regexp.MustCompile(`"message":"(.*)","commit"`)
+	createdPattern           = regexp.MustCompile(`"time":"(.*)","logger".*"NodePool":{"name":"(.*)"},"NodeClaim":{"name":"(.*)"},"requests".*"instance-types":"(.*)"`)
+	launchedPattern          = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},.*"provider-id":"(.*)","instance-type":"(.*)","zone":"(.*)","capacity-type":"(.*)","allocatable"`)
+	registeredPattern        = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},.*,"Node":{"name":"(.*)"`)
+	initializedPattern       = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},"namespace"`)
+	disruptingReasonPattern  = regexp.MustCompile(`"time":"(.*)","logger".*"reason":"(.*)","decision":"(.*)","disrupted-node-count":(.*),"replacement-node-count":(.*),"pod-count":(.*),"disrupted-nodes":.*,"NodeClaim":{"name":"(.*)"},"capacity-type"`)
+	disruptingCommandPattern = regexp.MustCompile(`"time":"(.*)","logger".*"command":"(.*)","decision":"(.*)","disrupted-node-count":(.*),"replacement-node-count":(.*),"pod-count":(.*),"disrupted-nodes":.*,"NodeClaim":{"name":"(.*)"},"capacity-type"`)
+	interruptionPattern      = regexp.MustCompile(`"time":"(.*)","logger".*"messageKind":"(.*)","NodeClaim":{"name":"(.*)"},"action"`)
+	annotatedPattern         = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},"namespace".*,"(.*)":"(.*)"`)
+	taintedNCPattern         = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},"taint.Key":"(.*)","taint.Value":"(.*)","taint.Effect":"(.*)"`)
+	taintedNodePattern       = regexp.MustCompile(`"time":"(.*)","logger".*"Node":{"name":"(.*)"},"namespace".*,"taint.Key":"(.*)","taint.Value":"(.*)","taint.Effect":"(.*)"`)
+	taintedNodeSimplePattern = regexp.MustCompile(`"time":"(.*)","logger".*"Node":{"name":"(.*)"},"namespace"`)
+	deletedPattern           = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},"namespace"`)
+)
+
 // export all struct values because this is required for usage with packages like JSON encoding/decoding or reflect
 // keep disruptednodecount, replacementnodecount, disruptedpodcount as strings because then we can have empty string ("") to differ from real values
 type Nodeclaimstruct struct {
@@ -54,10 +71,8 @@ type Nodeclaimstruct struct {
 }
 
 // internal helper function for pattern matching
-func matchPattern(pattern, logline string) []string {
-	re := regexp.MustCompile(pattern)
-	// a return value of nil indicates no match
-	return re.FindStringSubmatch(logline)
+func matchPattern(pattern *regexp.Regexp, logline string) []string {
+	return pattern.FindStringSubmatch(logline)
 }
 
 // internal helper function for scanner error handling
@@ -98,23 +113,16 @@ func NonBlockingParser(scanner *bufio.Scanner, nodeclaimmap *map[string]Nodeclai
 func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct, k8snodenamemap *map[string]string, filename string, inputline int) {
 	var createdtime, nodepool, instancetypes, nodeclaim string
 	var matchslice []string
-	var re *regexp.Regexp
-	// replacer replaces commas which are followed by a space with a dash and removes spaces.
-	// It's a package-level variable so we can easily reuse it, but
-	// this program doesn't take advantage of that fact.
-	var replacer = strings.NewReplacer(", ", "|", " ", "", "(s)", "s")
 
 	inputline++
-	re = regexp.MustCompile(`"message":"(.*)","commit"`)
-	matchslice = re.FindStringSubmatch(logline)
+	matchslice = messagePattern.FindStringSubmatch(logline)
 	// process matchslice if we found a match
 	if matchslice != nil {
 		//fmt.Println("message: ", matchslice[1])
 		switch matchslice[1] {
 		case "created nodeclaim":
 			// extract time and nodeclaim (new one)
-			pattern := `"time":"(.*)","logger".*"NodePool":{"name":"(.*)"},"NodeClaim":{"name":"(.*)"},"requests".*"instance-types":"(.*)"}`
-			if matchslicesub := matchPattern(pattern, logline); matchslicesub != nil {
+			if matchslicesub := matchPattern(createdPattern, logline); matchslicesub != nil {
 				//matchslicesub[0] always contains whole logline
 				for i, val := range matchslicesub[1:] {
 					switch i {
@@ -127,9 +135,8 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 					case 3:
 						// substitute "," because we output CSV finally
 						// Karpenter provisioner.go prints the first 5 instance types only and remaining number
-						if strings.Contains(val, " and ") {
-							position := strings.LastIndex(val, " and ")
-							instancetypes = fmt.Sprintf("%s|%s", replacer.Replace(val[:position]), replacer.Replace(val[position:]))
+						if idx := strings.LastIndex(val, " and "); idx > 0 {
+							instancetypes = fmt.Sprintf("%s|%s", replacer.Replace(val[:idx]), replacer.Replace(val[idx:]))
 						} else {
 							instancetypes = replacer.Replace(val)
 						}
@@ -175,105 +182,76 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 			}
 		case "launched nodeclaim":
 			// extract all nodeclaim details here
-			pattern := `"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},.*"provider-id":"(.*)","instance-type":"(.*)","zone":"(.*)","capacity-type":"(.*)","allocatable"`
-			if matchslicesub := matchPattern(pattern, logline); matchslicesub != nil {
+			if matchslicesub := matchPattern(launchedPattern, logline); matchslicesub != nil {
 				//matchslicesub[0] always contains whole logline
 				// if logline parsing went well, matchslicesub[2] will contain NodeClaim
 				if nodeclaim = matchslicesub[2]; nodeclaim == "" {
 					fmt.Fprintf(os.Stderr, "Parsing error empty \"NodeClaim\" for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
-				} else {
-					if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
-						//matchslice[0] always contains whole logline
-						for i, val := range matchslicesub[1:] {
-							switch i {
-							case 0:
-								entry.Launchedtime = val
-							case 2:
-								awsproviderID := strings.Split(val, "/")
-								entry.Providerid = awsproviderID[len(awsproviderID)-1]
-							case 3:
-								entry.Instancetype = val
-							case 4:
-								entry.Zone = val
-							case 5:
-								entry.Capacitytype = val
-							}
-						}
-						(*nodeclaimmap)[nodeclaim] = entry
-					}
+				} else if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
+					//matchslice[0] always contains whole logline
+					entry.Launchedtime = matchslicesub[1]
+					awsproviderID := strings.Split(matchslicesub[3], "/")
+					entry.Providerid = awsproviderID[len(awsproviderID)-1]
+					entry.Instancetype = matchslicesub[4]
+					entry.Zone = matchslicesub[5]
+					entry.Capacitytype = matchslicesub[6]
+					(*nodeclaimmap)[nodeclaim] = entry
 				}
 			} else {
 				fmt.Fprintf(os.Stderr, "Parsing error for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
 			}
 		case "registered nodeclaim":
 			// extract time, nodeclaim and K8s node name
-			pattern := `"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},.*,"Node":{"name":"(.*)"}`
-			if matchslicesub := matchPattern(pattern, logline); matchslicesub != nil {
+			if matchslicesub := matchPattern(registeredPattern, logline); matchslicesub != nil {
 				//matchslicesub[0] always contains whole logline
 				// if logline parsing went well, matchslicesub[2] will contain NodeClaim
 				if nodeclaim = matchslicesub[2]; nodeclaim == "" {
 					fmt.Fprintf(os.Stderr, "Parsing error empty \"NodeClaim\" for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
-				} else {
-					if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
-						//matchslicesub[0] always contains whole logline
-						for i, val := range matchslicesub[1:] {
-							switch i {
-							case 0:
-								entry.Registeredtime = val
-							case 2:
-								entry.K8snodename = val
-								(*k8snodenamemap)[val] = nodeclaim
-							}
-						}
-						(*nodeclaimmap)[nodeclaim] = entry
-					}
+				} else if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
+					//matchslicesub[0] always contains whole logline
+					entry.Registeredtime = matchslicesub[1]
+					entry.K8snodename = matchslicesub[3]
+					(*k8snodenamemap)[matchslicesub[3]] = nodeclaim
+					(*nodeclaimmap)[nodeclaim] = entry
 				}
 			} else {
 				fmt.Fprintf(os.Stderr, "Parsing error for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
 			}
 		case "initialized nodeclaim":
 			// extract time and nodeclaim
-			pattern := `"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},"namespace"`
-			if matchslicesub := matchPattern(pattern, logline); matchslicesub != nil {
+			if matchslicesub := matchPattern(initializedPattern, logline); matchslicesub != nil {
 				//matchslicesub[0] always contains whole logline
 				// if logline parsing went well, matchslicesub[2] will contain NodeClaim
 				if nodeclaim = matchslicesub[2]; nodeclaim == "" {
 					fmt.Fprintf(os.Stderr, "Parsing error empty \"NodeClaim\" for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
-				} else {
-					if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
-						//matchslicesub[0] always contains whole logline
-						if entry.Initializedtime = matchslicesub[1]; entry.Initializedtime != "" {
-							// calculate node startup time
-							if entry.Createdtime != "" {
-								t1, _ := datetime.Parse(entry.Createdtime, time.UTC)
-								t2, _ := datetime.Parse(entry.Initializedtime, time.UTC)
-								entry.Nodereadytime = t2.Sub(t1)
-								entry.Nodereadytimesec = entry.Nodereadytime.Seconds()
-							}
-						} else {
-							fmt.Fprintf(os.Stderr, "Parsing error empty \"initialized time\" for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
+				} else if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
+					//matchslicesub[0] always contains whole logline
+					if entry.Initializedtime = matchslicesub[1]; entry.Initializedtime != "" {
+						// calculate node startup time
+						if entry.Createdtime != "" {
+							t1, _ := datetime.Parse(entry.Createdtime, time.UTC)
+							t2, _ := datetime.Parse(entry.Initializedtime, time.UTC)
+							entry.Nodereadytime = t2.Sub(t1)
+							entry.Nodereadytimesec = entry.Nodereadytime.Seconds()
 						}
-						// we set nodeclaim to deleted even if we (for whatever reason) could not extract time
-						entry.Initialized = true
-						(*nodeclaimmap)[nodeclaim] = entry
+					} else {
+						fmt.Fprintf(os.Stderr, "Parsing error empty \"initialized time\" for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
 					}
+					// we set nodeclaim to deleted even if we (for whatever reason) could not extract time
+					entry.Initialized = true
+					(*nodeclaimmap)[nodeclaim] = entry
 				}
 			} else {
 				fmt.Fprintf(os.Stderr, "Parsing error for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
 			}
 		case "disrupting node(s)":
-			// extract time, message reason, decision, disrupted-node-count, replacment-node-count, podcount and nodeclaim
-			patterns := []string{
-				`"time":"(.*)","logger".*"reason":"(.*)","decision":"(.*)","disrupted-node-count":(.*),"replacement-node-count":(.*),"pod-count":(.*),"disrupted-nodes":.*,"NodeClaim":{"name":"(.*)"},"capacity-type"`,
-				`"time":"(.*)","logger".*"command":"(.*)","decision":"(.*)","disrupted-node-count":(.*),"replacement-node-count":(.*),"pod-count":(.*),"disrupted-nodes":.*,"NodeClaim":{"name":"(.*)"},"capacity-type"`,
-			}
+			// extract time, message reason/command, decision, disrupted-node-count, replacment-node-count, podcount and nodeclaim
 			var matchslicesub []string
 			var isCommandField bool
-			for i, pattern := range patterns {
-				if matchslicesub = matchPattern(pattern, logline); matchslicesub != nil {
-					isCommandField = (i == 1)
-					break
-				}
+			if matchslicesub = matchPattern(disruptingReasonPattern, logline); matchslicesub != nil {
+				isCommandField = false
+			} else if matchslicesub = matchPattern(disruptingCommandPattern, logline); matchslicesub != nil {
+				isCommandField = true
 			}
 			if matchslicesub != nil {
 				if nodeclaim = matchslicesub[7]; nodeclaim == "" {
@@ -298,193 +276,113 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 			}
 		case "initiating delete from interruption message":
 			// extract time, message kind (interruption kind/reason) and nodeclaim (this message kind has NodeClaim in a different position!)
-			pattern := `"time":"(.*)","logger".*"messageKind":"(.*)","NodeClaim":{"name":"(.*)"},"action"`
-			if matchslicesub := matchPattern(pattern, logline); matchslicesub != nil {
+			if matchslicesub := matchPattern(interruptionPattern, logline); matchslicesub != nil {
 				//matchslicesub[0] always contains whole logline
 				// if logline parsing went well, matchslicesub[3] will contain NodeClaim
 				if nodeclaim = matchslicesub[3]; nodeclaim == "" {
 					fmt.Fprintf(os.Stderr, "Parsing error empty \"NodeClaim\" for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
-				} else {
-					if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
-						for i, val := range matchslicesub[1:] {
-							switch i {
-							case 0:
-								entry.Interruptiontime = val
-							case 1:
-								entry.Interruptionkind = val
-							}
-							//fmt.Println("ind: ", i, "val: ", val)
-						}
-						(*nodeclaimmap)[nodeclaim] = entry
-					}
+				} else if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
+					entry.Interruptiontime = matchslicesub[1]
+					entry.Interruptionkind = matchslicesub[2]
+					(*nodeclaimmap)[nodeclaim] = entry
 				}
 			} else {
 				fmt.Fprintf(os.Stderr, "Parsing error for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
 			}
 		case "annotated nodeclaim":
 			// extract time, nodeclaim and annotation key/value
-			pattern := `"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},"namespace".*,"(.*)":"(.*)"}`
-			if matchslicesub := matchPattern(pattern, logline); matchslicesub != nil {
+			if matchslicesub := matchPattern(annotatedPattern, logline); matchslicesub != nil {
 				//matchslicesub[0] always contains whole logline
-				// if logline parsing went well, matchslicesub[3] will contain NodeClaim
+				// if logline parsing went well, matchslicesub[2] will contain NodeClaim
 				if nodeclaim = matchslicesub[2]; nodeclaim == "" {
 					fmt.Fprintf(os.Stderr, "Parsing error empty \"NodeClaim\" for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
-				} else {
-					if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
-						for i, val := range matchslicesub[1:] {
-							switch i {
-							case 0:
-								entry.Annotationtime = val
-							case 2:
-								// annotation key
-								entry.Annotation = val
-							case 3:
-								// add taint value to already existing taint key
-								entry.Annotation = fmt.Sprintf("%s:%s", entry.Annotation, val)
-							}
-							(*nodeclaimmap)[nodeclaim] = entry
-						}
-					}
+				} else if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
+					entry.Annotationtime = matchslicesub[1]
+					entry.Annotation = fmt.Sprintf("%s:%s", matchslicesub[3], matchslicesub[4])
+					(*nodeclaimmap)[nodeclaim] = entry
 				}
 			} else {
 				fmt.Fprintf(os.Stderr, "Parsing error for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
 			}
 		case "tainted node":
 			// extract time, nodeclaim and taint key/value/effect for Karpenter version 1.1.x+
-			pattern := `"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},"taint.Key":"(.*)","taint.Value":"(.*)","taint.Effect":"(.*)"}`
-			if matchslicesub := matchPattern(pattern, logline); matchslicesub != nil {
-				//matchslicesub[0] always contains whole logline
-				// if logline parsing went well, matchslicesub[3] will contain NodeClaim
-				if nodeclaim = matchslicesub[2]; nodeclaim == "" {
-					//log.Fatal("Parsing error while extracting NodeClaim, probably Karpenter log syntax has changed!")
-					fmt.Fprintf(os.Stderr, "Parsing error empty \"NodeClaim\" for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
-				} else {
-					if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
-						for i, val := range matchslicesub[1:] {
-							switch i {
-							case 0:
-								entry.Tainttime = val
-							case 2:
-								// taint key
-								entry.Taint = val
-							case 3:
-								// add taint value to already existing taint key
-								// note: taint value might be an empty string, so we reverse our check logic here !!!
-								entry.Taint = fmt.Sprintf("%s:%s", entry.Taint, val)
-							case 4:
-								// add taint effect to already existing taint key:value
-								entry.Taint = fmt.Sprintf("%s:%s", entry.Taint, val)
-							}
-							if val == "" && i != 3 {
-								fmt.Fprintf(os.Stderr, "Parsing error empty \"K8s node name\" for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
-							}
-							(*nodeclaimmap)[nodeclaim] = entry
-						}
-					}
-				}
-			} else {
-				// Karpenter version 0.37.x and 1.0.x don't put nodeclaim into "tainted node" message !
-				// extract time, k8snodename taint key/value/effect for Karpenter version 1.0.x
-				pattern := `"time":"(.*)","logger".*"Node":{"name":"(.*)"},"namespace".*,"taint.Key":"(.*)","taint.Value":"(.*)","taint.Effect":"(.*)"}`
-				if matchslicesub := matchPattern(pattern, logline); matchslicesub != nil {
-					// if logline parsing went well, matchslicesub[2] will contain K8s node name
-					if k8snodename := matchslicesub[2]; k8snodename == "" {
-						fmt.Fprintf(os.Stderr, "Parsing error empty \"K8s node name\" for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
-					} else {
-						if nodeclaim, ok := (*k8snodenamemap)[k8snodename]; ok {
-							if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
-								for i, val := range matchslicesub[1:] {
-									switch i {
-									case 0:
-										entry.Tainttime = val
-									case 2:
-										// taint key
-										entry.Taint = val
-									case 3:
-										// add taint value to already existing taint key
-										// note: taint value might be an empty string
-										entry.Taint = fmt.Sprintf("%s:%s", entry.Taint, val)
-									case 4:
-										// add taint effect to already existing taint key:value
-										entry.Taint = fmt.Sprintf("%s:%s", entry.Taint, val)
-									}
-									(*nodeclaimmap)[nodeclaim] = entry
-								}
-							}
-						} else {
-							fmt.Fprintf(os.Stderr, "No corresponding \"NodeClaim\" for K8s node \"%s\" for message \"tainted node\" in line %d in %s\n", k8snodename, inputline, filename)
-							fmt.Fprintf(os.Stderr, "Most probably %s does not contain a corresponding \"created nodeclaim\" log entry\n", filename)
-						}
-					}
-				} else {
-					// Karpenter version 0.37.x don't put taint key/value/effect into "tainted node" message !
-					//
-					// extract time and k8snodename for Karpenter version 0.37
-					pattern := `"time":"(.*)","logger".*"Node":{"name":"(.*)"},"namespace"`
-					if matchslicesub := matchPattern(pattern, logline); matchslicesub != nil {
-						// if logline parsing went well, matchslicesub[2] will contain K8s node name
-						if k8snodename := matchslicesub[2]; k8snodename == "" {
-							fmt.Fprintf(os.Stderr, "Parsing error empty \"K8s node name\" for message \"%s\" in line %d in %s\n", matchslice[1], inputline, filename)
-						} else {
-							if nodeclaim, ok := (*k8snodenamemap)[k8snodename]; ok {
-								if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
-									for i, val := range matchslicesub[1:] {
-										switch i {
-										case 0:
-											entry.Tainttime = val
-										}
-										(*nodeclaimmap)[nodeclaim] = entry
-									}
-								} else {
-									fmt.Fprintf(os.Stderr, "No corresponding \"NodeClaim\" for K8s node \"%s\" for message \"tainted node\" in line %d in %s\n", k8snodename, inputline, filename)
-									fmt.Fprintf(os.Stderr, "Most probably %s does not contain a corresponding \"created nodeclaim\" log entry\n", filename)
-								}
-							}
-						}
-					} else {
-						fmt.Fprintf(os.Stderr, "Parsing error for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
-					}
-				}
-			}
-		case "deleted nodeclaim":
-			// extract time and nodeclaim
-			pattern := `"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},"namespace"`
-			if matchslicesub := matchPattern(pattern, logline); matchslicesub != nil {
+			if matchslicesub := matchPattern(taintedNCPattern, logline); matchslicesub != nil {
 				//matchslicesub[0] always contains whole logline
 				// if logline parsing went well, matchslicesub[2] will contain NodeClaim
 				if nodeclaim = matchslicesub[2]; nodeclaim == "" {
 					fmt.Fprintf(os.Stderr, "Parsing error empty \"NodeClaim\" for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
-				} else {
-					if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
-						//matchslicesub[0] always contains whole logline
-						if entry.Deletedtime = matchslicesub[1]; entry.Deletedtime != "" {
-							// calculate node lifecycle time
-							if entry.Createdtime != "" {
-								t1, _ := datetime.Parse(entry.Createdtime, time.UTC)
-								t2, _ := datetime.Parse(entry.Deletedtime, time.UTC)
-								entry.Nodelifecycletime = t2.Sub(t1)
-								entry.Nodelifecycletimesec = entry.Nodelifecycletime.Seconds()
-							}
-							// calculate node termination time (time it takes from lifecycle annotation to actual deletion)
-							// if this takes really long you might have some blocking PDB or taints
-							if entry.Annotationtime != "" {
-								t1, _ := datetime.Parse(entry.Annotationtime, time.UTC)
-								t2, _ := datetime.Parse(entry.Deletedtime, time.UTC)
-								entry.Nodeterminationtime = t2.Sub(t1)
-								entry.Nodeterminationtimesec = entry.Nodeterminationtime.Seconds()
-							}
-						} else {
-							fmt.Fprintf(os.Stderr, "Parsing error empty \"deleted time\" for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
+				} else if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
+					entry.Tainttime = matchslicesub[1]
+					entry.Taint = fmt.Sprintf("%s:%s:%s", matchslicesub[3], matchslicesub[4], matchslicesub[5])
+					(*nodeclaimmap)[nodeclaim] = entry
+				}
+			} else {
+				// Karpenter version 0.37.x and 1.0.x don't put nodeclaim into "tainted node" message !
+				// extract time, k8snodename taint key/value/effect for Karpenter version 1.0.x
+				if matchslicesub := matchPattern(taintedNodePattern, logline); matchslicesub != nil {
+					// if logline parsing went well, matchslicesub[2] will contain K8s node name
+					if k8snodename := matchslicesub[2]; k8snodename == "" {
+						fmt.Fprintf(os.Stderr, "Parsing error empty \"K8s node name\" for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
+					} else if nodeclaim, ok := (*k8snodenamemap)[k8snodename]; ok {
+						if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
+							entry.Tainttime = matchslicesub[1]
+							entry.Taint = fmt.Sprintf("%s:%s:%s", matchslicesub[3], matchslicesub[4], matchslicesub[5])
+							(*nodeclaimmap)[nodeclaim] = entry
 						}
-						// we set nodeclaim to deleted even if we (for whatever reason) could not extract time
-						entry.Deleted = true
-						(*nodeclaimmap)[nodeclaim] = entry
+					} else {
+						fmt.Fprintf(os.Stderr, "No corresponding \"NodeClaim\" for K8s node \"%s\" for message \"tainted node\" in line %d in %s\n", k8snodename, inputline, filename)
+						fmt.Fprintf(os.Stderr, "Most probably %s does not contain a corresponding \"created nodeclaim\" log entry\n", filename)
 					}
+				} else if matchslicesub := matchPattern(taintedNodeSimplePattern, logline); matchslicesub != nil {
+					// Karpenter version 0.37.x don't put taint key/value/effect into "tainted node" message !
+					// extract time and k8snodename for Karpenter version 0.37
+					if k8snodename := matchslicesub[2]; k8snodename != "" {
+						if nodeclaim, ok := (*k8snodenamemap)[k8snodename]; ok {
+							if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
+								entry.Tainttime = matchslicesub[1]
+								(*nodeclaimmap)[nodeclaim] = entry
+							}
+						}
+					}
+				} else {
+					fmt.Fprintf(os.Stderr, "Parsing error for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
+				}
+			}
+		case "deleted nodeclaim":
+			// extract time and nodeclaim
+			if matchslicesub := matchPattern(deletedPattern, logline); matchslicesub != nil {
+				//matchslicesub[0] always contains whole logline
+				// if logline parsing went well, matchslicesub[2] will contain NodeClaim
+				if nodeclaim = matchslicesub[2]; nodeclaim == "" {
+					fmt.Fprintf(os.Stderr, "Parsing error empty \"NodeClaim\" for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
+				} else if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
+					//matchslicesub[0] always contains whole logline
+					if entry.Deletedtime = matchslicesub[1]; entry.Deletedtime != "" {
+						// calculate node lifecycle time
+						if entry.Createdtime != "" {
+							t1, _ := datetime.Parse(entry.Createdtime, time.UTC)
+							t2, _ := datetime.Parse(entry.Deletedtime, time.UTC)
+							entry.Nodelifecycletime = t2.Sub(t1)
+							entry.Nodelifecycletimesec = entry.Nodelifecycletime.Seconds()
+						}
+						// calculate node termination time (time it takes from lifecycle annotation to actual deletion)
+						// if this takes really long you might have some blocking PDB or taints
+						if entry.Annotationtime != "" {
+							t1, _ := datetime.Parse(entry.Annotationtime, time.UTC)
+							t2, _ := datetime.Parse(entry.Deletedtime, time.UTC)
+							entry.Nodeterminationtime = t2.Sub(t1)
+							entry.Nodeterminationtimesec = entry.Nodeterminationtime.Seconds()
+						}
+					} else {
+						fmt.Fprintf(os.Stderr, "Parsing error empty \"deleted time\" for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
+					}
+					// we set nodeclaim to deleted even if we (for whatever reason) could not extract time
+					entry.Deleted = true
+					(*nodeclaimmap)[nodeclaim] = entry
 				}
 			} else {
 				fmt.Fprintf(os.Stderr, "Parsing error for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
 			}
 		}
 	}
-	//}
 }
