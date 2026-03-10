@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"reflect"
 	"strings"
 	"time"
 
@@ -58,61 +57,6 @@ func GetConfig() (bucket, prefix, region string) {
 	return s3Bucket, s3Prefix, s3Region
 }
 
-// helper function to convert nodeclaimmap to CSV string with header
-func convertToCSV(nodeclaimmap *map[string]lp4k.Nodeclaimstruct) string {
-	var csvBuffer bytes.Buffer
-	var header string
-	var nodeclaimstruct lp4k.Nodeclaimstruct
-
-	// Generate header using reflect
-	reflecttype := reflect.TypeOf(nodeclaimstruct)
-	header = "Nodeclaim[1]"
-	for i := range reflecttype.NumField() {
-		header = fmt.Sprintf("%s,%s[%d]", header, reflecttype.Field(i).Name, i+2)
-	}
-
-	// Write header
-	csvBuffer.WriteString(header)
-	csvBuffer.WriteString("\n")
-
-	if len(*nodeclaimmap) == 0 {
-		return csvBuffer.String()
-	}
-
-	// Sort and write data
-	type keyvalue struct {
-		key   string
-		value lp4k.Nodeclaimstruct
-	}
-
-	s := make([]keyvalue, 0, len(*nodeclaimmap))
-	for k, v := range *nodeclaimmap {
-		s = append(s, keyvalue{k, v})
-	}
-
-	// Sort by created time (simple bubble sort for consistency)
-	for i := 0; i < len(s); i++ {
-		for j := i + 1; j < len(s); j++ {
-			if s[i].value.Createdtime > s[j].value.Createdtime {
-				s[i], s[j] = s[j], s[i]
-			}
-		}
-	}
-
-	// Write each nodeclaim row
-	for _, v := range s {
-		csvBuffer.WriteString(v.key)
-
-		reflectval := reflect.ValueOf(v.value)
-		for i := range reflectval.NumField() {
-			csvBuffer.WriteString(fmt.Sprintf(",%v", reflectval.Field(i).Interface()))
-		}
-		csvBuffer.WriteString("\n")
-	}
-
-	return csvBuffer.String()
-}
-
 // UploadToS3 uploads the nodeclaim CSV data to S3
 func UploadToS3(ctx context.Context, nodeclaimmap *map[string]lp4k.Nodeclaimstruct) error {
 	if !s3Enabled {
@@ -129,7 +73,7 @@ func UploadToS3(ctx context.Context, nodeclaimmap *map[string]lp4k.Nodeclaimstru
 	client := s3.NewFromConfig(cfg)
 
 	// Convert nodeclaimmap to CSV
-	csvData := convertToCSV(nodeclaimmap)
+	csvData := lp4k.ConvertToCSV(nodeclaimmap)
 
 	// Generate S3 key with timestamp
 	timestamp := time.Now().Format("2006-01-02-15-04-05")
