@@ -10,6 +10,7 @@
 * v1.2.x
 * v1.3.x
 * v1.4.x
+* v1.9.0
 
 \* Note: `"messageKind":"spot_interrupted"` is first supported with Karpenter version v1.1.x, so **LogParserForKarpenter (lp4k)** does not provide *interruptiontime* and *interruptionkind* in earlier versions
 
@@ -59,7 +60,7 @@ or
 ```
 or
 ```bash
-kubectl logs -n kube-system deployments/karpenter --all-pods=true [-f] | ./lp4k
+kubectl logs -n kube-system <Karpenter leader pod> [-f] | ./lp4k
 ```
 or for attaching to K8s/EKS cluster in current KUBECONFIG context
 ```bash

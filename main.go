@@ -21,8 +21,7 @@ import (
 )
 
 func main() {
-	//var logline, filename string
-	var filename string
+	var filename string = "STDIN"
 	var nodeclaimmap *map[string]lp4k.Nodeclaimstruct
 	// helper map of k8snodename to nodeclaim
 	var k8snodenamemap *map[string]string

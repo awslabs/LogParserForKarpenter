@@ -4,12 +4,9 @@ package parser
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"os"
-	"reflect"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 
@@ -56,31 +53,10 @@ type Nodeclaimstruct struct {
 	Deleted                bool
 }
 
-// struct for further sorting of map
-type keyvalue struct {
-	key   string
-	value Nodeclaimstruct
-}
-
-// internal helper function to set header based on Nodeclaimstruct
-func init() {
-	var nodeclaimstruct Nodeclaimstruct
-
-	// loop over v.value, which is a Nodeclaimstruct, using reflect
-	reflecttype := reflect.TypeOf(nodeclaimstruct)
-
-	// Go slices start with index 0, but Linux utils like awk count from 1
-	header = "Nodeclaim[1]"
-
-	for i := range reflecttype.NumField() {
-		//header = header + "," + reflecttype.Field(i).Name + "[" + strconv.Itoa(i+2) + "]"
-		header = fmt.Sprintf("%s,%s[%d]", header, reflecttype.Field(i).Name, i+2)
-	}
-}
-
 // internal helper function for pattern matching
 func matchPattern(pattern, logline string) []string {
 	re := regexp.MustCompile(pattern)
+	// a return value of nil indicates no match
 	return re.FindStringSubmatch(logline)
 }
 
@@ -91,19 +67,6 @@ func scannerErr(scanner *bufio.Scanner, stdin string) {
 		if err.Error() != "http2: response body closed" {
 			fmt.Fprintf(os.Stderr, "Error \"%s\" parsing %s\n", err, stdin)
 		}
-	}
-}
-
-// internal helper function to populate nodeclaimmap from K8s ConfigMap data i.e. map[string]string
-func Populatenodeclaimmap(nodeclaimmap *map[string]Nodeclaimstruct, cmdata map[string]string) {
-	var nodeclaimstruct Nodeclaimstruct
-
-	for key, val := range cmdata {
-		err := json.Unmarshal([]byte(val), &nodeclaimstruct)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "JSON encoding error while encoding Nodeclaimstruct of nodeclaim \"%s\\n", key)
-		}
-		(*nodeclaimmap)[key] = nodeclaimstruct
 	}
 }
 
@@ -299,38 +262,36 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 				fmt.Fprintf(os.Stderr, "Parsing error for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
 			}
 		case "disrupting node(s)":
-			// extract time, message reason, decision, disrupted-node-count, replacment-node-count, podcount and nodeclaim (this message kind has NodeClaim in a different position!)d nodeclaim (this message kind has NodeClaim in a different position!)
-			pattern := `"time":"(.*)","logger".*"reason":"(.*)","decision":"(.*)","disrupted-node-count":(.*),"replacement-node-count":(.*),"pod-count":(.*),"disrupted-nodes":.*,"NodeClaim":{"name":"(.*)"},"capacity-type"`
-			if matchslicesub := matchPattern(pattern, logline); matchslicesub != nil {
-				//matchslicesub[0] always contains whole logline
-				// if logline parsing went well, matchslicesub[3] will contain NodeClaim
+			// extract time, message reason, decision, disrupted-node-count, replacment-node-count, podcount and nodeclaim
+			patterns := []string{
+				`"time":"(.*)","logger".*"reason":"(.*)","decision":"(.*)","disrupted-node-count":(.*),"replacement-node-count":(.*),"pod-count":(.*),"disrupted-nodes":.*,"NodeClaim":{"name":"(.*)"},"capacity-type"`,
+				`"time":"(.*)","logger".*"command":"(.*)","decision":"(.*)","disrupted-node-count":(.*),"replacement-node-count":(.*),"pod-count":(.*),"disrupted-nodes":.*,"NodeClaim":{"name":"(.*)"},"capacity-type"`,
+			}
+			var matchslicesub []string
+			var isCommandField bool
+			for i, pattern := range patterns {
+				if matchslicesub = matchPattern(pattern, logline); matchslicesub != nil {
+					isCommandField = (i == 1)
+					break
+				}
+			}
+			if matchslicesub != nil {
 				if nodeclaim = matchslicesub[7]; nodeclaim == "" {
 					fmt.Fprintf(os.Stderr, "Parsing error empty \"NodeClaim\" for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
-				} else {
-					if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
-						for i, val := range matchslicesub[1:] {
-							//fmt.Println("ind: ", i, "val: ", val)
-							switch i {
-							case 0:
-								entry.Disruptiontime = val
-							case 1:
-								entry.Disruptionreason = val
-							case 2:
-								entry.Disruptiondecision = val
-							case 3:
-								entry.Disruptednodecount = val
-							case 4:
-								entry.Replacementnodecount = val
-							case 5:
-								entry.Disruptedpodcount = val
-								/*
-									if entry.disruptedpodcount, err = strconv.Atoi(val); err != nil {
-										entry.replacementnodecount = 0
-								*/
-							}
+				} else if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
+					entry.Disruptiontime = matchslicesub[1]
+					if isCommandField {
+						if idx := strings.IndexByte(matchslicesub[2], '/'); idx > 0 {
+							entry.Disruptionreason = strings.ToLower(matchslicesub[2][:idx])
 						}
-						(*nodeclaimmap)[nodeclaim] = entry
+					} else {
+						entry.Disruptionreason = matchslicesub[2]
 					}
+					entry.Disruptiondecision = matchslicesub[3]
+					entry.Disruptednodecount = matchslicesub[4]
+					entry.Replacementnodecount = matchslicesub[5]
+					entry.Disruptedpodcount = matchslicesub[6]
+					(*nodeclaimmap)[nodeclaim] = entry
 				}
 			} else {
 				fmt.Fprintf(os.Stderr, "Parsing error for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
@@ -526,70 +487,4 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 		}
 	}
 	//}
-}
-
-// helper function sorted slice
-func sortResult(nodeclaimmap *map[string]Nodeclaimstruct) []keyvalue {
-	// sort the nodeclaimmap map by createdtime if not empty
-
-	// create an empty helper slice s of key-value pairs
-	s := make([]keyvalue, 0, len((*nodeclaimmap)))
-
-	// append all map key-value pairs to the slice
-	for k, v := range *nodeclaimmap {
-		s = append(s, keyvalue{k, v})
-	}
-
-	sort.SliceStable(s, func(i, j int) bool {
-		return s[i].value.Createdtime < s[j].value.Createdtime
-	})
-
-	return s
-}
-
-func PrintSortedResult(nodeclaimmap *map[string]Nodeclaimstruct) {
-	if len((*nodeclaimmap)) != 0 {
-		s := sortResult(nodeclaimmap)
-
-		// print header
-		fmt.Println(header)
-
-		// print nodeclaim with attributes
-		for _, v := range s {
-			fmt.Print(v.key)
-
-			// loop over v.value, which is a Nodeclaimstruct, using reflect
-			reflectval := reflect.ValueOf(v.value)
-
-			for i := range reflectval.NumField() {
-				fmt.Print(",", reflectval.Field(i).Interface())
-			}
-			fmt.Println()
-		}
-	} else {
-		fmt.Fprintf(os.Stderr, "\nNo results - empty \"nodeclaim\" map\n")
-	}
-}
-
-// used by k8s package to create ConfigMap data
-func ConvertResult(nodeclaimmap *map[string]Nodeclaimstruct) map[string]string {
-	keyvalueMap := make(map[string]string)
-
-	if len((*nodeclaimmap)) != 0 {
-		s := sortResult(nodeclaimmap)
-
-		// Each key must consist of alphanumeric characters, '-', '_' or '.' so nodeclaim names must comply (add a check later
-		// add all information as key-value
-		for _, v := range s {
-			jsondata, err := json.Marshal(v.value)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "JSON encoding error while encoding Nodeclaimstruct of nodeclaim \"%s\\n", v.key)
-			}
-			keyvalueMap[v.key] = string(jsondata)
-		}
-	} else {
-		fmt.Fprintf(os.Stderr, "\nNo results - empty \"nodeclaim\" map\n")
-	}
-
-	return keyvalueMap
 }
