@@ -25,9 +25,12 @@ const (
 	s3PrefixEnv    = "LP4K_S3_PREFIX"
 	s3RegionEnv    = "LP4K_S3_REGION"
 	s3OverwriteEnv = "LP4K_S3_OVERWRITE"
+	timeFormatEnv  = "LP4K_TIME_FORMAT"
 	// context timeouts
 	configTimeout = 5 * time.Second
 	uploadTimeout = 30 * time.Second
+	// default time format
+	defaultTimeFormat = "2006-01-02-15-04-05"
 )
 
 var s3Bucket, s3Prefix, s3Region string
@@ -36,14 +39,16 @@ var s3Client *s3.Client
 var once sync.Once
 var clientErr error
 var startTimestamp string
+var timeFormat string
 
 // Initialize S3 configuration from environment variables
 func init() {
+	timeFormat = getEnvOrDefault(timeFormatEnv, defaultTimeFormat)
 	s3Bucket = os.Getenv(s3BucketEnv)
 	s3Prefix = getEnvOrDefault(s3PrefixEnv, "karpenter-logs")
 	s3Region = getEnvOrDefault(s3RegionEnv, "us-east-1")
 	s3Overwrite = getEnvBoolOrDefault(s3OverwriteEnv, false)
-	startTimestamp = time.Now().Format("2006-01-02-15-04-05")
+	startTimestamp = time.Now().Format(timeFormat)
 	// S3 is enabled only if bucket is specified
 	s3Enabled = s3Bucket != ""
 	if s3Enabled {
@@ -123,7 +128,7 @@ func UploadToS3(nodeclaimmap *map[string]lp4k.Nodeclaimstruct) error {
 		s3Key = fmt.Sprintf("%s/karpenter-nodeclaims-%s.csv", strings.TrimSuffix(s3Prefix, "/"), startTimestamp)
 	} else {
 		// Use current timestamp for timestamped mode (new key on each update)
-		timestamp := time.Now().Format("2006-01-02-15-04-05")
+		timestamp := time.Now().Format(timeFormat)
 		s3Key = fmt.Sprintf("%s/karpenter-nodeclaims-%s.csv", strings.TrimSuffix(s3Prefix, "/"), timestamp)
 	}
 	// Upload to S3
