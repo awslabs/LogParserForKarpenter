@@ -19,6 +19,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	lp4k "github.com/awslabs/LogParserForKarpenter/parser"
+	"github.com/awslabs/LogParserForKarpenter/s3"
 )
 
 const (
@@ -134,6 +135,14 @@ func nodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, n
 		if nodeclaimprint {
 			lp4k.PrintSortedResult(nodeclaimmap)
 		}
+
+		// upload to S3 if configured
+		if s3.IsEnabled() {
+			if err := s3.UploadToS3(nodeclaimmap); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Failed to upload to S3: %v\n", err)
+			}
+		}
+
 		fmt.Fprintf(os.Stderr, "\nNext nodeclaim data in ConfigMap \"%s/%s\" in %s (%.0f seconds), type Ctrl-C to end program\n", namespace, configmap, cmupdfreq.String(), cmupdfreq.Seconds())
 	}
 }
@@ -143,7 +152,7 @@ func CollectKarpenterLogs(ctx context.Context, clientSet *kubernetes.Clientset, 
 	fmt.Fprintf(os.Stderr, "\nRetrieving pods from namespace \"%s\" with label \"%s\"\n", namespace, label)
 	pods, err := clientSet.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: label})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "\nFailed to get pods\n")
+		fmt.Fprintf(os.Stderr, "Failed to get pods: %v\n", err)
 		os.Exit(1)
 	}
 	if len(pods.Items) == 0 {

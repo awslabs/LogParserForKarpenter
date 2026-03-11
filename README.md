@@ -31,6 +31,59 @@ K8s handling can be configured using the following OS environment variables:
 
 \* Note: In mode `LP4K_CM_OVERRIDE=true` **lp4k** will read existing nodeclaim data from ConfigMap specified by LP4K_CM_PREFIX
 
+### S3 Upload Configuration
+
+**lp4k** can automatically upload parsed Karpenter log data to Amazon S3. This feature is optional and only enabled when the S3 bucket environment variable is set.
+
+| Environment variable      | Default value     | Description
+| ------------- | ------------- | ------------- |
+| LP4K_S3_BUCKET | "" (disabled) | S3 bucket name where CSV files will be uploaded. S3 upload is only enabled when this is set
+| LP4K_S3_PREFIX | "karpenter-logs" | S3 key prefix for uploaded files
+| LP4K_S3_REGION | "us-east-1" | AWS region for S3 bucket
+
+When S3 upload is enabled, **lp4k** will:
+- Upload CSV files with timestamp in the filename: `karpenter-nodeclaims-YYYY-MM-DD-HH-MM-SS.csv`
+- Upload after parsing completes (file mode) or periodically during streaming (K8s mode, every LP4K_CM_UPDATE_FREQ)
+- Use AWS SDK default credential chain (IAM roles, environment variables, AWS config files, etc.)
+
+Example usage:
+```bash
+# Enable S3 upload
+export LP4K_S3_BUCKET=my-karpenter-logs-bucket
+export LP4K_S3_PREFIX=production/karpenter-logs
+export LP4K_S3_REGION=us-west-2
+
+# Run lp4k with file input
+./bin/lp4k karpenter-logs.txt
+
+# Or run in K8s streaming mode
+./bin/lp4k
+```
+
+**AWS Credentials:** Ensure your AWS credentials are configured. The tool uses the standard AWS SDK credential chain:
+- Environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`)
+- AWS credentials file (`~/.aws/credentials`)
+- IAM role (when running on EC2/EKS)
+- EKS Pod Identity or IRSA (when running as a pod in EKS)
+
+**IAM Permissions Required:**
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::your-bucket-name/*"
+    }
+  ]
+}
+```
+
+----
+
 Use:
 ```bash
 LP4K_CM_UPDATE_FREQ=10s ./bin/lp4k
@@ -140,4 +193,3 @@ See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more inform
 ## License
 
 This project is licensed under the Apache 2.0 License.
-

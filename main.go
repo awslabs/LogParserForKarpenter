@@ -16,6 +16,7 @@ import (
 	termutil "github.com/andrew-d/go-termutil"
 	"github.com/awslabs/LogParserForKarpenter/k8s"
 	lp4k "github.com/awslabs/LogParserForKarpenter/parser"
+	"github.com/awslabs/LogParserForKarpenter/s3"
 
 	"k8s.io/client-go/util/homedir"
 )
@@ -65,6 +66,15 @@ func main() {
 
 			// print nodeclaim output to STDOUT
 			lp4k.PrintSortedResult(nodeclaimmap)
+
+			// upload to S3 if configured
+			if s3.IsEnabled() {
+				if err := s3.UploadToS3(nodeclaimmap); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: Failed to upload to S3: %v\n", err)
+				}
+			} else {
+				fmt.Fprintf(os.Stderr, "S3 upload not configured - skipping upload\n")
+			}
 		}
 	} else {
 		for _, arg := range os.Args[1:] {
@@ -85,5 +95,12 @@ func main() {
 		}
 		// print nodeclaim output to STDOUT
 		lp4k.PrintSortedResult(nodeclaimmap)
+
+		// upload to S3 if configured
+		if s3.IsEnabled() {
+			if err := s3.UploadToS3(nodeclaimmap); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Failed to upload to S3: %v\n", err)
+			}
+		}
 	}
 }

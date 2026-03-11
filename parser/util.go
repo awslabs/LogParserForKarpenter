@@ -3,6 +3,7 @@
 package parser
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -66,7 +67,35 @@ func PrintSortedResult(nodeclaimmap *map[string]Nodeclaimstruct) {
 	}
 }
 
-// used by k8s package to create ConfigMap data
+// ConvertToCSV converts nodeclaimmap to a CSV string with header
+func ConvertToCSV(nodeclaimmap *map[string]Nodeclaimstruct) string {
+	var csvBuffer bytes.Buffer
+
+	// Write header
+	csvBuffer.WriteString(header)
+	csvBuffer.WriteString("\n")
+
+	if len(*nodeclaimmap) == 0 {
+		return csvBuffer.String()
+	}
+
+	// Sort and write data
+	s := sortResult(nodeclaimmap)
+
+	for _, v := range s {
+		csvBuffer.WriteString(v.key)
+
+		reflectval := reflect.ValueOf(v.value)
+		for i := range reflectval.NumField() {
+			csvBuffer.WriteString(fmt.Sprintf(",%v", reflectval.Field(i).Interface()))
+		}
+		csvBuffer.WriteString("\n")
+	}
+
+	return csvBuffer.String()
+}
+
+// ConvertResult is used by k8s package to create ConfigMap data
 func ConvertResult(nodeclaimmap *map[string]Nodeclaimstruct) map[string]string {
 	keyvalueMap := make(map[string]string)
 	if len((*nodeclaimmap)) == 0 {
