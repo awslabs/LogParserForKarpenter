@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
@@ -106,10 +105,8 @@ func nodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, n
 		// use unique ConfigMap name and override on every start
 		configmap = configmappref
 	} else {
-		// construct ConfigMap name from time stamp - it probably contains non-DNS characters, so modify accordingly
-		configmap = fmt.Sprintf("%s-%s", configmappref, strings.Replace(time.Now().Format(time.RFC3339), ":", "", -1))
-		configmap, _, _ = strings.Cut(configmap, "+")
-		configmap = strings.Replace(configmap, "T", "-", -1)
+		// construct ConfigMap name from time stamp
+		configmap = fmt.Sprintf("%s-%s", configmappref, s3.GetStartTimestamp())
 	}
 	fmt.Fprintf(os.Stderr, "\nUsing ConfigMap \"%s\" in namespace \"%s\" with updates every %s\n", configmap, namespace, cmupdfreq.String())
 	cm := v1.ConfigMap{

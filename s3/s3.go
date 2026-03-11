@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -20,29 +21,37 @@ import (
 
 const (
 	// environment variables
-	s3BucketEnv = "LP4K_S3_BUCKET"
-	s3PrefixEnv = "LP4K_S3_PREFIX"
-	s3RegionEnv = "LP4K_S3_REGION"
+	s3BucketEnv    = "LP4K_S3_BUCKET"
+	s3PrefixEnv    = "LP4K_S3_PREFIX"
+	s3RegionEnv    = "LP4K_S3_REGION"
+	s3OverwriteEnv = "LP4K_S3_OVERWRITE"
 	// context timeouts
 	configTimeout = 5 * time.Second
 	uploadTimeout = 30 * time.Second
 )
 
 var s3Bucket, s3Prefix, s3Region string
-var s3Enabled bool
+var s3Enabled, s3Overwrite bool
 var s3Client *s3.Client
 var once sync.Once
 var clientErr error
+var startTimestamp string
 
 // Initialize S3 configuration from environment variables
 func init() {
 	s3Bucket = os.Getenv(s3BucketEnv)
 	s3Prefix = getEnvOrDefault(s3PrefixEnv, "karpenter-logs")
 	s3Region = getEnvOrDefault(s3RegionEnv, "us-east-1")
+	s3Overwrite = getEnvBoolOrDefault(s3OverwriteEnv, false)
+	startTimestamp = time.Now().Format("2006-01-02-15-04-05")
 	// S3 is enabled only if bucket is specified
 	s3Enabled = s3Bucket != ""
 	if s3Enabled {
-		fmt.Fprintf(os.Stderr, "S3 upload enabled: bucket=%s, prefix=%s, region=%s\n", s3Bucket, s3Prefix, s3Region)
+		mode := "timestamped mode"
+		if s3Overwrite {
+			mode = "overwrite mode"
+		}
+		fmt.Fprintf(os.Stderr, "S3 upload enabled: bucket=%s, prefix=%s, region=%s (%s)\n", s3Bucket, s3Prefix, s3Region, mode)
 	}
 }
 
@@ -51,6 +60,15 @@ func getEnvOrDefault(key, defaultVal string) string {
 		return val
 	}
 	return defaultVal
+}
+
+func getEnvBoolOrDefault(key string, defaultVal bool) bool {
+	val := os.Getenv(key)
+	if val == "" {
+		return defaultVal
+	}
+	b, _ := strconv.ParseBool(val)
+	return b
 }
 
 // getS3Client returns a cached S3 client, creating it once on first call
@@ -75,8 +93,15 @@ func IsEnabled() bool {
 	return s3Enabled
 }
 
+// GetStartTimestamp returns the program start timestamp in format YYYY-MM-DD-HH-MM-SS
+func GetStartTimestamp() string {
+	return startTimestamp
+}
+
 // UploadToS3 uploads the nodeclaim CSV data to S3 with timeout and context cancellation support
 // The S3 client is cached and reused across multiple calls for efficiency
+// If LP4K_S3_OVERWRITE=true, the same object is overwritten on each call
+// Otherwise, a new timestamped object is created on each call
 func UploadToS3(nodeclaimmap *map[string]lp4k.Nodeclaimstruct) error {
 	if !s3Enabled {
 		return nil
@@ -91,9 +116,16 @@ func UploadToS3(nodeclaimmap *map[string]lp4k.Nodeclaimstruct) error {
 	}
 	// Convert nodeclaimmap to CSV
 	csvData := lp4k.ConvertToCSV(nodeclaimmap)
-	// Generate S3 key with timestamp
-	timestamp := time.Now().Format("2006-01-02-15-04-05")
-	s3Key := fmt.Sprintf("%s/karpenter-nodeclaims-%s.csv", strings.TrimSuffix(s3Prefix, "/"), timestamp)
+	// Generate S3 key
+	var s3Key string
+	if s3Overwrite {
+		// Use start timestamp for overwrite mode (same key on each update)
+		s3Key = fmt.Sprintf("%s/karpenter-nodeclaims-%s.csv", strings.TrimSuffix(s3Prefix, "/"), startTimestamp)
+	} else {
+		// Use current timestamp for timestamped mode (new key on each update)
+		timestamp := time.Now().Format("2006-01-02-15-04-05")
+		s3Key = fmt.Sprintf("%s/karpenter-nodeclaims-%s.csv", strings.TrimSuffix(s3Prefix, "/"), timestamp)
+	}
 	// Upload to S3
 	_, err = client.PutObject(uploadCtx, &s3.PutObjectInput{
 		Bucket:      aws.String(s3Bucket),

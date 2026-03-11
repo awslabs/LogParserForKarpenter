@@ -40,6 +40,7 @@ K8s handling can be configured using the following OS environment variables:
 | LP4K_S3_BUCKET | "" (disabled) | S3 bucket name where CSV files will be uploaded. S3 upload is only enabled when this is set
 | LP4K_S3_PREFIX | "karpenter-logs" | S3 key prefix for uploaded files
 | LP4K_S3_REGION | "us-east-1" | AWS region for S3 bucket
+| LP4K_S3_OVERWRITE | "false" | If true, overwrites the same S3 object (using program start time) on each update. If false, creates new timestamped objects on each update
 
 When S3 upload is enabled, **lp4k** will:
 - Upload CSV files with timestamp in the filename: `karpenter-nodeclaims-YYYY-MM-DD-HH-MM-SS.csv`
