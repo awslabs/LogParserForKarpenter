@@ -72,8 +72,6 @@ func main() {
 				if err := s3.UploadToS3(nodeclaimmap); err != nil {
 					fmt.Fprintf(os.Stderr, "Warning: Failed to upload to S3: %v\n", err)
 				}
-			} else {
-				fmt.Fprintf(os.Stderr, "S3 upload not configured - skipping upload\n")
 			}
 		}
 	} else {
