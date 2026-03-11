@@ -138,7 +138,7 @@ func nodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, n
 
 		// upload to S3 if configured
 		if s3.IsEnabled() {
-			if err := s3.UploadToS3(ctx, nodeclaimmap); err != nil {
+			if err := s3.UploadToS3(nodeclaimmap); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: Failed to upload to S3: %v\n", err)
 			}
 		}

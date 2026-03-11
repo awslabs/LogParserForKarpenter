@@ -4,7 +4,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -23,12 +22,6 @@ import (
 )
 
 func main() {
-	if s3.IsEnabled() {
-		fmt.Fprintln(os.Stderr, "S3 upload enabled")
-	} else {
-		fmt.Fprintln(os.Stderr, "S3 upload disabled (LP4K_S3_BUCKET not set)")
-	}
-
 	var filename string = "STDIN"
 	var nodeclaimmap *map[string]lp4k.Nodeclaimstruct
 	// helper map of k8snodename to nodeclaim
@@ -76,8 +69,7 @@ func main() {
 
 			// upload to S3 if configured
 			if s3.IsEnabled() {
-				ctx := context.Background()
-				if err := s3.UploadToS3(ctx, nodeclaimmap); err != nil {
+				if err := s3.UploadToS3(nodeclaimmap); err != nil {
 					fmt.Fprintf(os.Stderr, "Warning: Failed to upload to S3: %v\n", err)
 				}
 			} else {
@@ -106,8 +98,7 @@ func main() {
 
 		// upload to S3 if configured
 		if s3.IsEnabled() {
-			ctx := context.Background()
-			if err := s3.UploadToS3(ctx, nodeclaimmap); err != nil {
+			if err := s3.UploadToS3(nodeclaimmap); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: Failed to upload to S3: %v\n", err)
 			}
 		}

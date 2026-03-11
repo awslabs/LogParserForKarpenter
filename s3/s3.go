@@ -30,21 +30,22 @@ var s3Enabled bool
 // Initialize S3 configuration from environment variables
 func init() {
 	s3Bucket = os.Getenv(s3BucketEnv)
-	s3Prefix = os.Getenv(s3PrefixEnv)
-	s3Region = os.Getenv(s3RegionEnv)
+	s3Prefix = getEnvOrDefault(s3PrefixEnv, "karpenter-logs")
+	s3Region = getEnvOrDefault(s3RegionEnv, "us-east-1")
 
 	// S3 is enabled only if bucket is specified
 	s3Enabled = s3Bucket != ""
 
 	if s3Enabled {
-		if s3Prefix == "" {
-			s3Prefix = "karpenter-logs"
-		}
-		if s3Region == "" {
-			s3Region = "us-east-1"
-		}
 		fmt.Fprintf(os.Stderr, "S3 upload enabled: bucket=%s, prefix=%s, region=%s\n", s3Bucket, s3Prefix, s3Region)
 	}
+}
+
+func getEnvOrDefault(key, defaultVal string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+	return defaultVal
 }
 
 // IsEnabled returns whether S3 upload is configured
@@ -52,16 +53,13 @@ func IsEnabled() bool {
 	return s3Enabled
 }
 
-// GetConfig returns the S3 configuration
-func GetConfig() (bucket, prefix, region string) {
-	return s3Bucket, s3Prefix, s3Region
-}
-
 // UploadToS3 uploads the nodeclaim CSV data to S3
-func UploadToS3(ctx context.Context, nodeclaimmap *map[string]lp4k.Nodeclaimstruct) error {
+func UploadToS3(nodeclaimmap *map[string]lp4k.Nodeclaimstruct) error {
 	if !s3Enabled {
 		return nil
 	}
+
+	ctx := context.Background()
 
 	// Load AWS configuration
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(s3Region))
