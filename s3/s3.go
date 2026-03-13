@@ -44,6 +44,13 @@ var timeFormat string
 // Initialize S3 configuration from environment variables
 func init() {
 	timeFormat = getEnvOrDefault(timeFormatEnv, defaultTimeFormat)
+	// Validate time format by attempting to parse a formatted time
+	testTime := time.Now()
+	formatted := testTime.Format(timeFormat)
+	if _, err := time.Parse(timeFormat, formatted); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Invalid LP4K_TIME_FORMAT \"%s\", falling back to default \"%s\"\n", timeFormat, defaultTimeFormat)
+		timeFormat = defaultTimeFormat
+	}
 	s3Bucket = os.Getenv(s3BucketEnv)
 	s3Prefix = getEnvOrDefault(s3PrefixEnv, "karpenter-logs")
 	s3Region = getEnvOrDefault(s3RegionEnv, "us-east-1")
