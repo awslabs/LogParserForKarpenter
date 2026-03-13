@@ -27,7 +27,8 @@ K8s handling can be configured using the following OS environment variables:
 | LP4K_CM_UPDATE_FREQ | "30s" | update frequency of ConfigMap and STDOUT if enabled (default), must be valid Go time.Duration string like "30s" or 2m30s"
 | LP4K_CM_PREFIX | "lp4k-cm" | nodeclaim ConfigMap prefix, if KARPENTER_LP4K_CM_OVERRIDE=false or ConfigMap name, if KARPENTER_LP4K_CM_OVERRIDE=true
 | LP4K_CM_OVERRIDE | "false" | determines, if ConfigMap will just use prefix and will be overriden upon every start of lp4k
-| LP4K_NODECLAIM_PRINT | "true" | print nodeclaim information every KARPENTER_CM_UPDATE_FREQ to STDOUT
+| LP4K_NODECLAIM_PRINT | "true" | print nodeclaim information every KARPENTER_CM_UPDATE_FREQ to STDOUT
+| LP4K_TIME_FORMAT | "2006-01-02-15-04-05" | time format for ConfigMap names and S3 object timestamps, must be a valid Go time layout string
 
 \* Note: In mode `LP4K_CM_OVERRIDE=true` **lp4k** will read existing nodeclaim data from ConfigMap specified by LP4K_CM_PREFIX
 
@@ -40,6 +41,7 @@ K8s handling can be configured using the following OS environment variables:
 | LP4K_S3_BUCKET | "" (disabled) | S3 bucket name where CSV files will be uploaded. S3 upload is only enabled when this is set
 | LP4K_S3_PREFIX | "karpenter-logs" | S3 key prefix for uploaded files
 | LP4K_S3_REGION | "us-east-1" | AWS region for S3 bucket
+| LP4K_S3_OVERWRITE | "false" | If true, overwrites the same S3 object (using program start time) on each update. If false, creates new timestamped objects on each update
 
 When S3 upload is enabled, **lp4k** will:
 - Upload CSV files with timestamp in the filename: `karpenter-nodeclaims-YYYY-MM-DD-HH-MM-SS.csv`
