@@ -19,6 +19,7 @@ GIT_COMMIT?=$(shell git rev-parse HEAD)
 BUILD_DATE?=$(shell date -u -Iseconds)
 LDFLAGS?="-s -w"
 
+GO ?= go
 OS?=$(shell go env GOHOSTOS)
 ARCH?=$(shell go env GOHOSTARCH)
 
@@ -54,7 +55,7 @@ bin:
 	@mkdir -p $@
 
 bin/$(BINARY): $(GO_SOURCES) | bin
-	CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) go build -mod=readonly -ldflags ${LDFLAGS} -o $@ .
+	CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) $(GO) build -mod=readonly -ldflags ${LDFLAGS} -o $@ .
 
 .PHONY: all
 all: bin/$(BINARY) bin/$(TOOLS)
@@ -63,7 +64,7 @@ all: bin/$(BINARY) bin/$(TOOLS)
 tools: bin/$(TOOLS)
 
 bin/$(TOOLS): $(TOOLS_SOURCES) | bin
-	CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) go build -mod=readonly -ldflags ${LDFLAGS} -o $@  ./tools/
+	CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) $(GO) build -mod=readonly -ldflags ${LDFLAGS} -o $@  ./tools/
 
 .PHONY: install
 install: bin/$(BINARY) bin/$(TOOLS)
@@ -71,6 +72,6 @@ install: bin/$(BINARY) bin/$(TOOLS)
 
 .PHONY: update
 update:
-	go mod tidy
+	$(GO) mod tidy
 
 
