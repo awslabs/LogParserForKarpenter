@@ -17,6 +17,12 @@
 
 It allows using either STDIN (for example for piping live Karpenter controller logs) or multiple Karpenter log files as input and will print CSV style formatted output of nodeclaim data ordered by createdtime to STDOUT, so one can easily redirect it into a file and analyse with tools like [Amazon QuickSight](https://docs.aws.amazon.com/quicksight/latest/user/welcome.html) or Microsoft Excel.
 
+**lp4k** supports two input formats which are automatically detected:
+1. **Plain text** — raw Karpenter controller log output (one JSON log line per line)
+2. **JSON array** — Grafana/Loki log export format (a JSON array of objects, each requiring a `"line"` field with the raw Karpenter log line and a `"date"` field for chronological sorting)
+
+No flags are needed — the format is detected automatically for both file arguments and STDIN input.
+
 If neither STDIN nor log files are used as input, **lp4k** will attach to a running K8s/EKS cluster and parses Karpenter logs (streamed logs, similar to *kubectl logs -f* using LP4K_KARPENTER_NAMESPACE and LP4K_KARPENTER_LABEL) and creates a ConfigMap *lp4k-cm-\<date\>* in same namespace, which gets updated every LP4K_CM_UPDATE_FREQ.
 
 K8s handling can be configured using the following OS environment variables:
@@ -114,11 +120,23 @@ or
 ```bash
 ./bin/lp4k <Karpenter log output file 1> [... <Karpenter log output file n>]
 ```
-or
+or with Grafana/Loki JSON export files:
 ```bash
-kubectl logs -n kube-system <Karpenter leader pod> [-f] | ./lp4k
+./bin/lp4k grafana-export.json
 ```
-or for attaching to K8s/EKS cluster in current KUBECONFIG context
+or mix plain text and JSON files in a single invocation:
+```bash
+./bin/lp4k karpenter-logs.txt grafana-export.json
+```
+or pipe from kubectl:
+```bash
+kubectl logs -n kube-system <Karpenter leader pod> [-f] | ./bin/lp4k
+```
+or pipe a Grafana/Loki JSON export via STDIN:
+```bash
+cat grafana-export.json | ./bin/lp4k
+```
+or for attaching to K8s/EKS cluster in current KUBECONFIG context:
 ```bash
 ./bin/lp4k
 ```

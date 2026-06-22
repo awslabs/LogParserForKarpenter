@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
 	"log"
@@ -52,14 +51,11 @@ func main() {
 			// collect and parse logs
 			k8s.CollectKarpenterLogs(ctx, clientSet, nodeclaimmap, k8snodenamemap)
 		} else {
-			fmt.Fprintf(os.Stderr, "Attached to STDIN - parsing iput until EOF or Ctrl-C\n")
+			fmt.Fprintf(os.Stderr, "Attached to STDIN - parsing input until EOF or Ctrl-C\n")
 			time.Sleep(1 * time.Second)
 
-			ch := make(chan os.Signal, 1)
-			signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
-
-			// main parsing logic
-			lp4k.BlockingParser(ch, bufio.NewScanner(os.Stdin), nodeclaimmap, k8snodenamemap, filename, 0)
+			signal.Notify(make(chan os.Signal, 1), os.Interrupt, syscall.SIGTERM)
+			lp4k.ParseInput(os.Stdin, nodeclaimmap, k8snodenamemap, filename)
 
 			// STDIN empty or Ctrl-C
 			fmt.Fprintf(os.Stderr, "Finished parsing STDIN\n\n")
@@ -86,8 +82,7 @@ func main() {
 			}
 			defer file.Close()
 
-			// main parsing logic
-			lp4k.NonBlockingParser(bufio.NewScanner(file), nodeclaimmap, k8snodenamemap, filename, 0)
+			lp4k.ParseInput(file, nodeclaimmap, k8snodenamemap, filename)
 
 			fmt.Fprintf(os.Stderr, "Finished parsing input file %s\n\n", filename)
 		}
@@ -102,3 +97,4 @@ func main() {
 		}
 	}
 }
+
