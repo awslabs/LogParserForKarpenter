@@ -4,9 +4,12 @@ package parser
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -26,7 +29,7 @@ var (
 	disruptingReasonPattern  = regexp.MustCompile(`"time":"(.*)","logger".*"reason":"(.*)","decision":"(.*)","disrupted-node-count":(.*),"replacement-node-count":(.*),"pod-count":(.*),"disrupted-nodes":.*,"NodeClaim":{"name":"(.*)"},"capacity-type"`)
 	disruptingCommandPattern = regexp.MustCompile(`"time":"(.*)","logger".*"command":"(.*)","decision":"(.*)","disrupted-node-count":(.*),"replacement-node-count":(.*),"pod-count":(.*),"disrupted-nodes":.*,"NodeClaim":{"name":"(.*)"},"capacity-type"`)
 	interruptionPattern      = regexp.MustCompile(`"time":"(.*)","logger".*"messageKind":"(.*)","NodeClaim":{"name":"(.*)"},"action"`)
-	annotatedPattern         = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},"namespace".*,"(.*)":"(.*)"`)
+	annotatedPattern         = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*?)"}.*,"([^"]+)":"([^"]+)"}$`)
 	taintedNCPattern         = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},"taint.Key":"(.*)","taint.Value":"(.*)","taint.Effect":"(.*)"`)
 	taintedNodePattern       = regexp.MustCompile(`"time":"(.*)","logger".*"Node":{"name":"(.*)"},"namespace".*,"taint.Key":"(.*)","taint.Value":"(.*)","taint.Effect":"(.*)"`)
 	taintedNodeSimplePattern = regexp.MustCompile(`"time":"(.*)","logger".*"Node":{"name":"(.*)"},"namespace"`)
@@ -107,6 +110,44 @@ func NonBlockingParser(scanner *bufio.Scanner, nodeclaimmap *map[string]Nodeclai
 		ParseKarpenterLogs(scanner.Text(), nodeclaimmap, k8snodenamemap, stdin, inputline)
 	}
 	scannerErr(scanner, stdin)
+}
+
+// wrapper around main parsing logic for JSON array input (e.g. Loki/Grafana exports)
+// each array element must have a "line" field containing the raw Karpenter log line
+// entries are sorted chronologically by "date" field before processing
+func jsonArrayParser(r io.Reader, nodeclaimmap *map[string]Nodeclaimstruct, k8snodenamemap *map[string]string, filename string) {
+	decoder := json.NewDecoder(r)
+
+	// consume opening '['
+	if _, err := decoder.Token(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading JSON array start in %s: %v\n", filename, err)
+		return
+	}
+
+	type jsonEntry struct {
+		Line string `json:"line"`
+		Date string `json:"date"`
+	}
+	var entries []jsonEntry
+	for decoder.More() {
+		var entry jsonEntry
+		if err := decoder.Decode(&entry); err != nil {
+			fmt.Fprintf(os.Stderr, "Error decoding JSON element in %s: %v\n", filename, err)
+			continue
+		}
+		if entry.Line != "" {
+			entries = append(entries, entry)
+		}
+	}
+
+	// sort by date ascending so "created nodeclaim" is processed before later lifecycle events
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Date < entries[j].Date
+	})
+
+	for i, entry := range entries {
+		ParseKarpenterLogs(entry.Line, nodeclaimmap, k8snodenamemap, filename, i+1)
+	}
 }
 
 // main parsing logic

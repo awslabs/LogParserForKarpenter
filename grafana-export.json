@@ -1,0 +1,222 @@
+[
+	{
+		"line": "{\"level\":\"INFO\",\"time\":\"2026-06-18T18:54:32.448Z\",\"logger\":\"controller\",\"message\":\"deleted nodeclaim\",\"commit\":\"e7e1327\",\"controller\":\"nodeclaim.lifecycle\",\"controllerGroup\":\"karpenter.sh\",\"controllerKind\":\"NodeClaim\",\"NodeClaim\":{\"name\":\"spot-c6pmd\"},\"namespace\":\"\",\"name\":\"spot-c6pmd\",\"reconcileID\":\"be65a322-36e2-4c1e-a663-526554f46500\",\"provider-id\":\"aws:///eu-central-1a/i-03b853ed22694ea1e\",\"Node\":{\"name\":\"ip-10-250-108-164.eu-central-1.compute.internal\"}}",
+		"timestamp": "1781808872448184729",
+		"date": "2026-06-18T18:54:32.448Z",
+		"fields": {
+			"app": "karpenter",
+			"container": "controller",
+			"container_image": "public.ecr.aws/karpenter/controller:1.9.0@sha256:30a506c64fbb1d8026cbfd9a1d662be3ab6e33a7999290a104085d78b49a69d7",
+			"detected_level": "info",
+			"job": "pod_logs",
+			"label_app_kubernetes_io_instance": "karpenter",
+			"namespace": "karpenter",
+			"node": "ip-10-250-109-202.eu-central-1.compute.internal",
+			"node_ip": "10.250.109.202",
+			"pod": "karpenter-5ff58bd574-fc5bh",
+			"pod_ip": "100.64.88.251",
+			"service_name": "karpenter",
+			"stream": "stdout"
+		}
+	},
+	{
+		"line": "{\"level\":\"INFO\",\"time\":\"2026-06-18T18:53:38.954Z\",\"logger\":\"controller\",\"message\":\"tainted node\",\"commit\":\"e7e1327\",\"controller\":\"node.termination\",\"controllerGroup\":\"\",\"controllerKind\":\"Node\",\"Node\":{\"name\":\"ip-10-250-108-164.eu-central-1.compute.internal\"},\"namespace\":\"\",\"name\":\"ip-10-250-108-164.eu-central-1.compute.internal\",\"reconcileID\":\"b8d65752-d79d-495d-a4ea-529f2459aa8f\",\"NodeClaim\":{\"name\":\"spot-c6pmd\"},\"taint.Key\":\"karpenter.sh/disrupted\",\"taint.Value\":\"\",\"taint.Effect\":\"NoSchedule\"}",
+		"timestamp": "1781808818954971336",
+		"date": "2026-06-18T18:53:38.954Z",
+		"fields": {
+			"app": "karpenter",
+			"container": "controller",
+			"container_image": "public.ecr.aws/karpenter/controller:1.9.0@sha256:30a506c64fbb1d8026cbfd9a1d662be3ab6e33a7999290a104085d78b49a69d7",
+			"detected_level": "info",
+			"job": "pod_logs",
+			"label_app_kubernetes_io_instance": "karpenter",
+			"namespace": "karpenter",
+			"node": "ip-10-250-109-202.eu-central-1.compute.internal",
+			"node_ip": "10.250.109.202",
+			"pod": "karpenter-5ff58bd574-fc5bh",
+			"pod_ip": "100.64.88.251",
+			"service_name": "karpenter",
+			"stream": "stdout"
+		}
+	},
+	{
+		"line": "{\"level\":\"INFO\",\"time\":\"2026-06-18T18:53:38.910Z\",\"logger\":\"controller\",\"message\":\"annotated nodeclaim\",\"commit\":\"e7e1327\",\"controller\":\"nodeclaim.lifecycle\",\"controllerGroup\":\"karpenter.sh\",\"controllerKind\":\"NodeClaim\",\"NodeClaim\":{\"name\":\"spot-c6pmd\"},\"namespace\":\"\",\"name\":\"spot-c6pmd\",\"reconcileID\":\"9819a96d-1e41-4aa4-9395-f3d468c621a6\",\"provider-id\":\"aws:///eu-central-1a/i-03b853ed22694ea1e\",\"Node\":{\"name\":\"ip-10-250-108-164.eu-central-1.compute.internal\"},\"karpenter.sh/nodeclaim-termination-timestamp\":\"2026-06-25T18:53:38Z\"}",
+		"timestamp": "1781808818910409342",
+		"date": "2026-06-18T18:53:38.910Z",
+		"fields": {
+			"app": "karpenter",
+			"container": "controller",
+			"container_image": "public.ecr.aws/karpenter/controller:1.9.0@sha256:30a506c64fbb1d8026cbfd9a1d662be3ab6e33a7999290a104085d78b49a69d7",
+			"detected_level": "info",
+			"job": "pod_logs",
+			"label_app_kubernetes_io_instance": "karpenter",
+			"namespace": "karpenter",
+			"node": "ip-10-250-109-202.eu-central-1.compute.internal",
+			"node_ip": "10.250.109.202",
+			"pod": "karpenter-5ff58bd574-fc5bh",
+			"pod_ip": "100.64.88.251",
+			"service_name": "karpenter",
+			"stream": "stdout"
+		}
+	},
+	{
+		"line": "{\"level\":\"INFO\",\"time\":\"2026-06-18T18:53:38.600Z\",\"logger\":\"controller\",\"message\":\"initialized nodeclaim\",\"commit\":\"e7e1327\",\"controller\":\"nodeclaim.lifecycle\",\"controllerGroup\":\"karpenter.sh\",\"controllerKind\":\"NodeClaim\",\"NodeClaim\":{\"name\":\"spot-5lbr8\"},\"namespace\":\"\",\"name\":\"spot-5lbr8\",\"reconcileID\":\"1622dbad-c3d2-4424-9fc1-205fe23902dd\",\"provider-id\":\"aws:///eu-central-1a/i-0aa2c06e631b912e9\",\"Node\":{\"name\":\"ip-10-250-108-46.eu-central-1.compute.internal\"},\"allocatable\":{\"cpu\":\"7910m\",\"ephemeral-storage\":\"95500736762\",\"hugepages-1Gi\":\"0\",\"hugepages-2Mi\":\"0\",\"memory\":\"15218236Ki\",\"pods\":\"44\"}}",
+		"timestamp": "1781808818609970093",
+		"date": "2026-06-18T18:53:38.609Z",
+		"fields": {
+			"app": "karpenter",
+			"container": "controller",
+			"container_image": "public.ecr.aws/karpenter/controller:1.9.0@sha256:30a506c64fbb1d8026cbfd9a1d662be3ab6e33a7999290a104085d78b49a69d7",
+			"detected_level": "info",
+			"job": "pod_logs",
+			"label_app_kubernetes_io_instance": "karpenter",
+			"namespace": "karpenter",
+			"node": "ip-10-250-109-202.eu-central-1.compute.internal",
+			"node_ip": "10.250.109.202",
+			"pod": "karpenter-5ff58bd574-fc5bh",
+			"pod_ip": "100.64.88.251",
+			"service_name": "karpenter",
+			"stream": "stdout"
+		}
+	},
+	{
+		"line": "{\"level\":\"INFO\",\"time\":\"2026-06-18T18:53:15.472Z\",\"logger\":\"controller\",\"message\":\"registered nodeclaim\",\"commit\":\"e7e1327\",\"controller\":\"nodeclaim.lifecycle\",\"controllerGroup\":\"karpenter.sh\",\"controllerKind\":\"NodeClaim\",\"NodeClaim\":{\"name\":\"spot-5lbr8\"},\"namespace\":\"\",\"name\":\"spot-5lbr8\",\"reconcileID\":\"70f281d9-1907-47b4-8dde-43d5706b3ec2\",\"provider-id\":\"aws:///eu-central-1a/i-0aa2c06e631b912e9\",\"Node\":{\"name\":\"ip-10-250-108-46.eu-central-1.compute.internal\"}}",
+		"timestamp": "1781808795472714488",
+		"date": "2026-06-18T18:53:15.472Z",
+		"fields": {
+			"app": "karpenter",
+			"container": "controller",
+			"container_image": "public.ecr.aws/karpenter/controller:1.9.0@sha256:30a506c64fbb1d8026cbfd9a1d662be3ab6e33a7999290a104085d78b49a69d7",
+			"detected_level": "info",
+			"job": "pod_logs",
+			"label_app_kubernetes_io_instance": "karpenter",
+			"namespace": "karpenter",
+			"node": "ip-10-250-109-202.eu-central-1.compute.internal",
+			"node_ip": "10.250.109.202",
+			"pod": "karpenter-5ff58bd574-fc5bh",
+			"pod_ip": "100.64.88.251",
+			"service_name": "karpenter",
+			"stream": "stdout"
+		}
+	},
+	{
+		"line": "{\"level\":\"INFO\",\"time\":\"2026-06-18T18:53:06.235Z\",\"logger\":\"controller\",\"message\":\"launched nodeclaim\",\"commit\":\"e7e1327\",\"controller\":\"nodeclaim.lifecycle\",\"controllerGroup\":\"karpenter.sh\",\"controllerKind\":\"NodeClaim\",\"NodeClaim\":{\"name\":\"spot-5lbr8\"},\"namespace\":\"\",\"name\":\"spot-5lbr8\",\"reconcileID\":\"db1a54be-e3ca-4500-ba66-f45a00e07058\",\"provider-id\":\"aws:///eu-central-1a/i-0aa2c06e631b912e9\",\"instance-type\":\"c7i.2xlarge\",\"zone\":\"eu-central-1a\",\"capacity-type\":\"spot\",\"allocatable\":{\"cpu\":\"7910m\",\"ephemeral-storage\":\"89Gi\",\"memory\":\"15218216Ki\",\"pods\":\"44\",\"vpc.amazonaws.com/pod-eni\":\"38\"}}",
+		"timestamp": "1781808786235585504",
+		"date": "2026-06-18T18:53:06.235Z",
+		"fields": {
+			"app": "karpenter",
+			"container": "controller",
+			"container_image": "public.ecr.aws/karpenter/controller:1.9.0@sha256:30a506c64fbb1d8026cbfd9a1d662be3ab6e33a7999290a104085d78b49a69d7",
+			"detected_level": "info",
+			"job": "pod_logs",
+			"label_app_kubernetes_io_instance": "karpenter",
+			"namespace": "karpenter",
+			"node": "ip-10-250-109-202.eu-central-1.compute.internal",
+			"node_ip": "10.250.109.202",
+			"pod": "karpenter-5ff58bd574-fc5bh",
+			"pod_ip": "100.64.88.251",
+			"service_name": "karpenter",
+			"stream": "stdout"
+		}
+	},
+	{
+		"line": "{\"level\":\"INFO\",\"time\":\"2026-06-18T18:53:03.833Z\",\"logger\":\"controller\",\"message\":\"created nodeclaim\",\"commit\":\"e7e1327\",\"controller\":\"disruption\",\"namespace\":\"\",\"name\":\"\",\"reconcileID\":\"26a5a4eb-4a02-4aeb-8457-f359979ee2ac\",\"NodePool\":{\"name\":\"spot\"},\"NodeClaim\":{\"name\":\"spot-5lbr8\"},\"requests\":{\"cpu\":\"4665m\",\"ephemeral-storage\":\"1650Mi\",\"memory\":\"8931087232\",\"pods\":\"14\"},\"instance-types\":\"c5.2xlarge, c5.4xlarge, c5a.2xlarge, c5ad.2xlarge, c5d.2xlarge and 10 other(s)\"}",
+		"timestamp": "1781808783833306740",
+		"date": "2026-06-18T18:53:03.833Z",
+		"fields": {
+			"app": "karpenter",
+			"container": "controller",
+			"container_image": "public.ecr.aws/karpenter/controller:1.9.0@sha256:30a506c64fbb1d8026cbfd9a1d662be3ab6e33a7999290a104085d78b49a69d7",
+			"detected_level": "info",
+			"job": "pod_logs",
+			"label_app_kubernetes_io_instance": "karpenter",
+			"namespace": "karpenter",
+			"node": "ip-10-250-109-202.eu-central-1.compute.internal",
+			"node_ip": "10.250.109.202",
+			"pod": "karpenter-5ff58bd574-fc5bh",
+			"pod_ip": "100.64.88.251",
+			"service_name": "karpenter",
+			"stream": "stdout"
+		}
+	},
+	{
+		"line": "{\"level\":\"INFO\",\"time\":\"2026-06-18T18:00:02.156Z\",\"logger\":\"controller\",\"message\":\"initialized nodeclaim\",\"commit\":\"e7e1327\",\"controller\":\"nodeclaim.lifecycle\",\"controllerGroup\":\"karpenter.sh\",\"controllerKind\":\"NodeClaim\",\"NodeClaim\":{\"name\":\"spot-c6pmd\"},\"namespace\":\"\",\"name\":\"spot-c6pmd\",\"reconcileID\":\"3e462eac-7fdf-4bad-a79e-5bd9356a891b\",\"provider-id\":\"aws:///eu-central-1a/i-03b853ed22694ea1e\",\"Node\":{\"name\":\"ip-10-250-108-164.eu-central-1.compute.internal\"},\"allocatable\":{\"cpu\":\"7910m\",\"ephemeral-storage\":\"95500736762\",\"hugepages-1Gi\":\"0\",\"hugepages-2Mi\":\"0\",\"memory\":\"15130168Ki\",\"pods\":\"44\"}}",
+		"timestamp": "1781805602156842829",
+		"date": "2026-06-18T18:00:02.156Z",
+		"fields": {
+			"app": "karpenter",
+			"container": "controller",
+			"container_image": "public.ecr.aws/karpenter/controller:1.9.0@sha256:30a506c64fbb1d8026cbfd9a1d662be3ab6e33a7999290a104085d78b49a69d7",
+			"detected_level": "info",
+			"job": "pod_logs",
+			"label_app_kubernetes_io_instance": "karpenter",
+			"namespace": "karpenter",
+			"node": "ip-10-250-109-202.eu-central-1.compute.internal",
+			"node_ip": "10.250.109.202",
+			"pod": "karpenter-5ff58bd574-fc5bh",
+			"pod_ip": "100.64.88.251",
+			"service_name": "karpenter",
+			"stream": "stdout"
+		}
+	},
+	{
+		"line": "{\"level\":\"INFO\",\"time\":\"2026-06-18T17:59:35.422Z\",\"logger\":\"controller\",\"message\":\"registered nodeclaim\",\"commit\":\"e7e1327\",\"controller\":\"nodeclaim.lifecycle\",\"controllerGroup\":\"karpenter.sh\",\"controllerKind\":\"NodeClaim\",\"NodeClaim\":{\"name\":\"spot-c6pmd\"},\"namespace\":\"\",\"name\":\"spot-c6pmd\",\"reconcileID\":\"5a0284b2-7691-4181-a790-a7588bc7ec86\",\"provider-id\":\"aws:///eu-central-1a/i-03b853ed22694ea1e\",\"Node\":{\"name\":\"ip-10-250-108-164.eu-central-1.compute.internal\"}}",
+		"timestamp": "1781805575422140466",
+		"date": "2026-06-18T17:59:35.422Z",
+		"fields": {
+			"app": "karpenter",
+			"container": "controller",
+			"container_image": "public.ecr.aws/karpenter/controller:1.9.0@sha256:30a506c64fbb1d8026cbfd9a1d662be3ab6e33a7999290a104085d78b49a69d7",
+			"detected_level": "info",
+			"job": "pod_logs",
+			"label_app_kubernetes_io_instance": "karpenter",
+			"namespace": "karpenter",
+			"node": "ip-10-250-109-202.eu-central-1.compute.internal",
+			"node_ip": "10.250.109.202",
+			"pod": "karpenter-5ff58bd574-fc5bh",
+			"pod_ip": "100.64.88.251",
+			"service_name": "karpenter",
+			"stream": "stdout"
+		}
+	},
+	{
+		"line": "{\"level\":\"INFO\",\"time\":\"2026-06-18T17:59:25.233Z\",\"logger\":\"controller\",\"message\":\"launched nodeclaim\",\"commit\":\"e7e1327\",\"controller\":\"nodeclaim.lifecycle\",\"controllerGroup\":\"karpenter.sh\",\"controllerKind\":\"NodeClaim\",\"NodeClaim\":{\"name\":\"spot-c6pmd\"},\"namespace\":\"\",\"name\":\"spot-c6pmd\",\"reconcileID\":\"300a8812-befe-44fc-a0e7-313dfbe4aef8\",\"provider-id\":\"aws:///eu-central-1a/i-03b853ed22694ea1e\",\"instance-type\":\"c7a.2xlarge\",\"zone\":\"eu-central-1a\",\"capacity-type\":\"spot\",\"allocatable\":{\"cpu\":\"7910m\",\"ephemeral-storage\":\"89Gi\",\"memory\":\"15130152Ki\",\"pods\":\"44\",\"vpc.amazonaws.com/pod-eni\":\"38\"}}",
+		"timestamp": "1781805565233222249",
+		"date": "2026-06-18T17:59:25.233Z",
+		"fields": {
+			"app": "karpenter",
+			"container": "controller",
+			"container_image": "public.ecr.aws/karpenter/controller:1.9.0@sha256:30a506c64fbb1d8026cbfd9a1d662be3ab6e33a7999290a104085d78b49a69d7",
+			"detected_level": "info",
+			"job": "pod_logs",
+			"label_app_kubernetes_io_instance": "karpenter",
+			"namespace": "karpenter",
+			"node": "ip-10-250-109-202.eu-central-1.compute.internal",
+			"node_ip": "10.250.109.202",
+			"pod": "karpenter-5ff58bd574-fc5bh",
+			"pod_ip": "100.64.88.251",
+			"service_name": "karpenter",
+			"stream": "stdout"
+		}
+	},
+	{
+		"line": "{\"level\":\"INFO\",\"time\":\"2026-06-18T17:59:21.432Z\",\"logger\":\"controller\",\"message\":\"created nodeclaim\",\"commit\":\"e7e1327\",\"controller\":\"provisioner\",\"namespace\":\"\",\"name\":\"\",\"reconcileID\":\"edac719e-e781-40ba-9e12-ad0265e0e272\",\"NodePool\":{\"name\":\"spot\"},\"NodeClaim\":{\"name\":\"spot-c6pmd\"},\"requests\":{\"cpu\":\"6215m\",\"ephemeral-storage\":\"1950Mi\",\"memory\":\"12833297280\",\"pods\":\"15\"},\"instance-types\":\"c5.2xlarge, c5.4xlarge, c5a.2xlarge, c5a.4xlarge, c5ad.2xlarge and 100 other(s)\"}",
+		"timestamp": "1781805561432685903",
+		"date": "2026-06-18T17:59:21.432Z",
+		"fields": {
+			"app": "karpenter",
+			"container": "controller",
+			"container_image": "public.ecr.aws/karpenter/controller:1.9.0@sha256:30a506c64fbb1d8026cbfd9a1d662be3ab6e33a7999290a104085d78b49a69d7",
+			"detected_level": "info",
+			"job": "pod_logs",
+			"label_app_kubernetes_io_instance": "karpenter",
+			"namespace": "karpenter",
+			"node": "ip-10-250-109-202.eu-central-1.compute.internal",
+			"node_ip": "10.250.109.202",
+			"pod": "karpenter-5ff58bd574-fc5bh",
+			"pod_ip": "100.64.88.251",
+			"service_name": "karpenter",
+			"stream": "stdout"
+		}
+	}
+]
