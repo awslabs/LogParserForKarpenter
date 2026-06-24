@@ -164,12 +164,37 @@ Just run:
 ```bash
 make tools
 ```
-A binary `lp4kcm` for your OS and platform is build in directory `bin`.
+Binaries `lp4kcm` and `lp4kchain` for your OS and platform are built in directory `bin`.
 
 Then run it like:
 ```bash
-./bin/lp4k <lp4k ConfigMap name 1> [... <lp4k ConfigMap name n>]
+./bin/lp4kcm <lp4k ConfigMap name 1> [... <lp4k ConfigMap name n>]
 ```
+
+### lp4kchain
+
+**lp4kchain** generates a Mermaid diagram visualizing nodeclaim replacement chains from **lp4k** CSV output. This helps identify cascading consolidation churn (see [karpenter-provider-aws#7146](https://github.com/aws/karpenter-provider-aws/issues/7146)).
+
+```bash
+# Generate Mermaid source (.mmd) to stdout via pipe
+./bin/lp4k karpenter-logs.json | ./bin/lp4kchain
+
+# Generate Mermaid source to file
+./bin/lp4kchain lp4k-output.csv output.mmd
+
+# Generate PNG directly (requires mmdc, see doc/lp4kchain-install.md)
+./bin/lp4kchain lp4k-output.csv output.png
+```
+
+The diagram shows:
+- **Red nodes** — initial disrupted nodeclaims (chain start)
+- **Yellow nodes** — intermediate nodeclaims (replaced and are themselves replacements = churn)
+- **Blue nodes** — final nodeclaims (end of chain, still running)
+- **N-to-1 consolidations** — multiple nodes merged into one
+
+See [doc/lp4kchain-install.md](doc/lp4kchain-install.md) for mmdc installation instructions.
+
+![Sample replacement chain diagram](lp4k-replacement-chains.png "Example lp4kchain output showing cascading consolidation churn")
 
 ## Analyse LogParserForKarpenter output
 The simplest way for analysis is to use the output and parse it using standard Linux utilities like awk, cut and grep.
