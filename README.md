@@ -15,6 +15,19 @@
 
 \* Note: `"messageKind":"spot_interrupted"` is first supported with Karpenter version v1.1.x, so **LogParserForKarpenter (lp4k)** does not provide *interruptiontime* and *interruptionkind* in earlier versions
 
+### Nodeclaim Replacement Tracking
+
+When Karpenter performs consolidation with `decision: "replace"` (Karpenter >= 1.x), the disrupted nodeclaim(s) are replaced by a new one. **lp4k** tracks this relationship via the `reconcileID` field in the logs and exposes two CSV columns:
+
+| Column | Description |
+|---|---|
+| `Replacedby` | On the disrupted nodeclaim: name of its replacement nodeclaim |
+| `Replaces` | On the replacement nodeclaim: pipe-delimited name(s) of the disrupted nodeclaim(s) it replaces |
+
+This covers both 1-to-1 replacements and N-to-1 consolidations. For older Karpenter versions that only use `decision: "delete"`, these columns remain empty.
+
+---
+
 It allows using either STDIN (for example for piping live Karpenter controller logs) or multiple Karpenter log files as input and will print CSV style formatted output of nodeclaim data ordered by createdtime to STDOUT, so one can easily redirect it into a file and analyse with tools like [Amazon QuickSight](https://docs.aws.amazon.com/quicksight/latest/user/welcome.html) or Microsoft Excel.
 
 **lp4k** supports two input formats which are automatically detected:
@@ -140,7 +153,7 @@ or for attaching to K8s/EKS cluster in current KUBECONFIG context:
 ```bash
 ./bin/lp4k
 ```
-The sample output file [sample-multi-file-klp-output.csv](sample-multi-file-klp-output.csv) shows all exposed nodeclaim information and can be used as a sample starter to build analysis on top of it.
+The sample output file [sample-multi-file-lp4k-output.csv](sample-multi-file-lp4k-output.csv) shows all exposed nodeclaim information and can be used as a sample starter to build analysis on top of it.
 * Note: **lp4k** will recognise new nodeclaims and populate its internal structures first when Karpenter controller logs show a logline containing `"message":"created nodeclaim"`. That means after a Karpenter controller restart and a subsequent and required restart **lp4k** will not recognise already existing nodeclaims and shows `No results - empty "nodeclaim" map`
 
 ### lp4kcm
@@ -162,11 +175,11 @@ Then run it like:
 The simplest way for analysis is to use the output and parse it using standard Linux utilities like awk, cut and grep.
 ```console
 # indexed header
-$ head -1 sample-multi-file-klp-output.csv 
-nodeclaim[1],createdtime[2],nodepool[3],instancetypes[4],launchedtime[5],providerid[6],instancetype[7],zone[8],capacitytype[9],registeredtime[10],k8snodename[11],initializedtime[12],nodereadytime[13],nodereadytimesec[14],disruptiontime[15],disruptionreason[16],disruptiondecision[17],disruptednodecount[18],replacementnodecount[19],disruptedpodcount[20],annotationtime[21],annotation[22],tainttime[23],taint[24],interruptiontime[25],interruptionkind[26],deletedtime[27],nodeterminationtime[28],nodeterminationtimesec[29],nodelifecycletime[30],nodelifecycletimesec[31],initialized[32],deleted[33]
+$ head -1 sample-multi-file-lp4k-output.csv 
+Nodeclaim[1],Createdtime[2],Nodepool[3],Instancetypes[4],Launchedtime[5],Providerid[6],Instancetype[7],Zone[8],Capacitytype[9],Registeredtime[10],K8snodename[11],Initializedtime[12],Nodereadytime[13],Nodereadytimesec[14],Disruptiontime[15],Disruptionreason[16],Disruptiondecision[17],Disruptednodecount[18],Replacementnodecount[19],Disruptedpodcount[20],Replacedby[21],Replaces[22],Annotationtime[23],Annotation[24],Tainttime[25],Taint[26],Interruptiontime[27],Interruptionkind[28],Deletedtime[29],Nodeterminationtime[30],Nodeterminationtimesec[31],Nodelifecycletime[32],Nodelifecycletimesec[33],Initialized[34],Deleted[35]
 
 # print nodeclaim[index/column=1], nodereadytime[13],nodereadytimesec[14]
-$ cat sample-multi-file-klp-output.csv | awk -F  ',' '{print $1,$13,$14 }' | more
+$ cat sample-multi-file-lp4k-output.csv | awk -F  ',' '{print $1,$13,$14 }' | more
 nodeclaim[1] nodereadytime[13] nodereadytimesec[14]
 spot-844xp 1m18.591s 78.6
 default-brbk4 0s 0.0
@@ -181,7 +194,7 @@ local-storage-raid-al2023-9kx8z 48.781s 48.8
 ...
 
 # search for specific value sof a specific nodeclaim
-$ cat sample-multi-file-klp-output.csv | awk -F  ',' '/local-storage-raid-al2023-nccxt/ { print $1,$13,$14 }'
+$ cat sample-multi-file-lp4k-output.csv | awk -F  ',' '/local-storage-raid-al2023-nccxt/ { print $1,$13,$14 }'
 local-storage-raid-al2023-nccxt 1m8.447s 68.4
 
 # combine directly with lp4k and raw Karpenter controller logs

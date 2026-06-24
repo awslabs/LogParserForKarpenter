@@ -20,20 +20,23 @@ import (
 var header string
 
 var (
-	replacer                 = strings.NewReplacer(", ", "|", " ", "", "(s)", "s")
-	messagePattern           = regexp.MustCompile(`"message":"(.*)","commit"`)
-	createdPattern           = regexp.MustCompile(`"time":"(.*)","logger".*"NodePool":{"name":"(.*)"},"NodeClaim":{"name":"(.*)"},"requests".*"instance-types":"(.*)"`)
-	launchedPattern          = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},.*"provider-id":"(.*)","instance-type":"(.*)","zone":"(.*)","capacity-type":"(.*)","allocatable"`)
-	registeredPattern        = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},.*,"Node":{"name":"(.*)"`)
-	initializedPattern       = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},"namespace"`)
-	disruptingReasonPattern  = regexp.MustCompile(`"time":"(.*)","logger".*"reason":"(.*)","decision":"(.*)","disrupted-node-count":(.*),"replacement-node-count":(.*),"pod-count":(.*),"disrupted-nodes":.*,"NodeClaim":{"name":"(.*)"},"capacity-type"`)
-	disruptingCommandPattern = regexp.MustCompile(`"time":"(.*)","logger".*"command":"(.*)","decision":"(.*)","disrupted-node-count":(.*),"replacement-node-count":(.*),"pod-count":(.*),"disrupted-nodes":.*,"NodeClaim":{"name":"(.*)"},"capacity-type"`)
-	interruptionPattern      = regexp.MustCompile(`"time":"(.*)","logger".*"messageKind":"(.*)","NodeClaim":{"name":"(.*)"},"action"`)
-	annotatedPattern         = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*?)"}.*,"([^"]+)":"([^"]+)"}$`)
-	taintedNCPattern         = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},"taint.Key":"(.*)","taint.Value":"(.*)","taint.Effect":"(.*)"`)
-	taintedNodePattern       = regexp.MustCompile(`"time":"(.*)","logger".*"Node":{"name":"(.*)"},"namespace".*,"taint.Key":"(.*)","taint.Value":"(.*)","taint.Effect":"(.*)"`)
-	taintedNodeSimplePattern = regexp.MustCompile(`"time":"(.*)","logger".*"Node":{"name":"(.*)"},"namespace"`)
-	deletedPattern           = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},"namespace"`)
+	replacer                  = strings.NewReplacer(", ", "|", " ", "", "(s)", "s")
+	messagePattern            = regexp.MustCompile(`"message":"(.*)","commit"`)
+	reconcileIDPattern        = regexp.MustCompile(`"reconcileID":"([^"]+)"`)
+	controllerPattern         = regexp.MustCompile(`"controller":"([^"]+)"`)
+	disruptedNodeclaimPattern = regexp.MustCompile(`"NodeClaim":{"name":"([^"]+)"},"capacity-type"`)
+	createdPattern            = regexp.MustCompile(`"time":"(.*)","logger".*"NodePool":{"name":"(.*)"},"NodeClaim":{"name":"(.*)"},"requests".*"instance-types":"(.*)"`)
+	launchedPattern           = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},.*"provider-id":"(.*)","instance-type":"(.*)","zone":"(.*)","capacity-type":"(.*)","allocatable"`)
+	registeredPattern         = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},.*,"Node":{"name":"(.*)"`)
+	initializedPattern        = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},"namespace"`)
+	disruptingReasonPattern   = regexp.MustCompile(`"time":"(.*)","logger".*"reason":"(.*)","decision":"(.*)","disrupted-node-count":(.*),"replacement-node-count":(.*),"pod-count":(.*),"disrupted-nodes":.*,"NodeClaim":{"name":"(.*)"},"capacity-type"`)
+	disruptingCommandPattern  = regexp.MustCompile(`"time":"(.*)","logger".*"command":"(.*)","decision":"(.*)","disrupted-node-count":(.*),"replacement-node-count":(.*),"pod-count":(.*),"disrupted-nodes":.*,"NodeClaim":{"name":"(.*)"},"capacity-type"`)
+	interruptionPattern       = regexp.MustCompile(`"time":"(.*)","logger".*"messageKind":"(.*)","NodeClaim":{"name":"(.*)"},"action"`)
+	annotatedPattern          = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*?)"}.*,"([^"]+)":"([^"]+)"}$`)
+	taintedNCPattern          = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},"taint.Key":"(.*)","taint.Value":"(.*)","taint.Effect":"(.*)"`)
+	taintedNodePattern        = regexp.MustCompile(`"time":"(.*)","logger".*"Node":{"name":"(.*)"},"namespace".*,"taint.Key":"(.*)","taint.Value":"(.*)","taint.Effect":"(.*)"`)
+	taintedNodeSimplePattern  = regexp.MustCompile(`"time":"(.*)","logger".*"Node":{"name":"(.*)"},"namespace"`)
+	deletedPattern            = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},"namespace"`)
 )
 
 // export all struct values because this is required for usage with packages like JSON encoding/decoding or reflect
@@ -58,6 +61,8 @@ type Nodeclaimstruct struct {
 	Disruptednodecount     string
 	Replacementnodecount   string
 	Disruptedpodcount      string
+	Replacedby             string
+	Replaces               string
 	Annotationtime         string
 	Annotation             string
 	Tainttime              string
@@ -89,11 +94,11 @@ func scannerErr(scanner *bufio.Scanner, stdin string) {
 }
 
 // wrapper around main parsing logic with blocking
-func BlockingParser(ch chan os.Signal, scanner *bufio.Scanner, nodeclaimmap *map[string]Nodeclaimstruct, k8snodenamemap *map[string]string, stdin string, inputline int) {
+func BlockingParser(ch chan os.Signal, scanner *bufio.Scanner, nodeclaimmap *map[string]Nodeclaimstruct, k8snodenamemap *map[string]string, reconcileIDmap *map[string][]string, stdin string, inputline int) {
 	// main parsing logic
 	for scanner.Scan() {
 		//logline := scanner.Text()
-		ParseKarpenterLogs(scanner.Text(), nodeclaimmap, k8snodenamemap, stdin, inputline)
+		ParseKarpenterLogs(scanner.Text(), nodeclaimmap, k8snodenamemap, reconcileIDmap, stdin, inputline)
 		// we wait until Ctrl-C because we have an input from something like "kubectl logs -n karpenter -l=app.kubernetes.io/name=karpenter -f"
 		go func() {
 			<-ch
@@ -103,11 +108,11 @@ func BlockingParser(ch chan os.Signal, scanner *bufio.Scanner, nodeclaimmap *map
 }
 
 // wrapper around main parsing logic without blocking
-func NonBlockingParser(scanner *bufio.Scanner, nodeclaimmap *map[string]Nodeclaimstruct, k8snodenamemap *map[string]string, stdin string, inputline int) {
+func NonBlockingParser(scanner *bufio.Scanner, nodeclaimmap *map[string]Nodeclaimstruct, k8snodenamemap *map[string]string, reconcileIDmap *map[string][]string, stdin string, inputline int) {
 	// main parsing logic
 	for scanner.Scan() {
 		//logline := scanner.Text()
-		ParseKarpenterLogs(scanner.Text(), nodeclaimmap, k8snodenamemap, stdin, inputline)
+		ParseKarpenterLogs(scanner.Text(), nodeclaimmap, k8snodenamemap, reconcileIDmap, stdin, inputline)
 	}
 	scannerErr(scanner, stdin)
 }
@@ -115,7 +120,7 @@ func NonBlockingParser(scanner *bufio.Scanner, nodeclaimmap *map[string]Nodeclai
 // wrapper around main parsing logic for JSON array input (e.g. Loki/Grafana exports)
 // each array element must have a "line" field containing the raw Karpenter log line
 // entries are sorted chronologically by "date" field before processing
-func jsonArrayParser(r io.Reader, nodeclaimmap *map[string]Nodeclaimstruct, k8snodenamemap *map[string]string, filename string) {
+func jsonArrayParser(r io.Reader, nodeclaimmap *map[string]Nodeclaimstruct, k8snodenamemap *map[string]string, reconcileIDmap *map[string][]string, filename string) {
 	decoder := json.NewDecoder(r)
 
 	// consume opening '['
@@ -146,12 +151,12 @@ func jsonArrayParser(r io.Reader, nodeclaimmap *map[string]Nodeclaimstruct, k8sn
 	})
 
 	for i, entry := range entries {
-		ParseKarpenterLogs(entry.Line, nodeclaimmap, k8snodenamemap, filename, i+1)
+		ParseKarpenterLogs(entry.Line, nodeclaimmap, k8snodenamemap, reconcileIDmap, filename, i+1)
 	}
 }
 
 // main parsing logic
-func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct, k8snodenamemap *map[string]string, filename string, inputline int) {
+func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct, k8snodenamemap *map[string]string, reconcileIDmap *map[string][]string, filename string, inputline int) {
 	var createdtime, nodepool, instancetypes, nodeclaim string
 	var matchslice []string
 
@@ -183,6 +188,23 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 						}
 					}
 				}
+				// check if this is a replacement nodeclaim (controller == "disruption" and reconcileID links to disrupted nodeclaims)
+				var replaces string
+				if ctrlMatch := matchPattern(controllerPattern, logline); ctrlMatch != nil && ctrlMatch[1] == "disruption" {
+					if ridMatch := matchPattern(reconcileIDPattern, logline); ridMatch != nil {
+						if disruptedNames, ok := (*reconcileIDmap)[ridMatch[1]]; ok {
+							replaces = strings.Join(disruptedNames, "|")
+							// set Replacedby on each disrupted nodeclaim
+							for _, disruptedNC := range disruptedNames {
+								if entry, ok := (*nodeclaimmap)[disruptedNC]; ok {
+									entry.Replacedby = nodeclaim
+									(*nodeclaimmap)[disruptedNC] = entry
+								}
+							}
+							delete(*reconcileIDmap, ridMatch[1])
+						}
+					}
+				}
 				// we only create a new nodeclaimmap map entry when we capture a "created nodeclaim" log line
 				// add entry to hash map
 				(*nodeclaimmap)[nodeclaim] = Nodeclaimstruct{
@@ -205,6 +227,8 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 					Disruptednodecount:     "",
 					Replacementnodecount:   "",
 					Disruptedpodcount:      "",
+					Replacedby:             "",
+					Replaces:               replaces,
 					Annotationtime:         "",
 					Annotation:             "",
 					Tainttime:              "",
@@ -311,6 +335,16 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 					entry.Replacementnodecount = matchslicesub[5]
 					entry.Disruptedpodcount = matchslicesub[6]
 					(*nodeclaimmap)[nodeclaim] = entry
+				}
+				// track reconcileID for replace decisions to link disrupted nodeclaims to their replacement
+				if matchslicesub[3] == "replace" {
+					if ridMatch := matchPattern(reconcileIDPattern, logline); ridMatch != nil {
+						// extract all disrupted nodeclaim names from the line (handles multi-node consolidation)
+						allDisrupted := disruptedNodeclaimPattern.FindAllStringSubmatch(logline, -1)
+						for _, m := range allDisrupted {
+							(*reconcileIDmap)[ridMatch[1]] = append((*reconcileIDmap)[ridMatch[1]], m[1])
+						}
+					}
 				}
 			} else {
 				fmt.Fprintf(os.Stderr, "Parsing error for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
