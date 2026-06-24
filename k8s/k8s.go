@@ -144,7 +144,7 @@ func nodeclaimsConfigMap(ctx context.Context, clientSet *kubernetes.Clientset, n
 	}
 }
 
-func CollectKarpenterLogs(ctx context.Context, clientSet *kubernetes.Clientset, nodeclaimmap *map[string]lp4k.Nodeclaimstruct, k8snodenamemap *map[string]string) {
+func CollectKarpenterLogs(ctx context.Context, clientSet *kubernetes.Clientset, nodeclaimmap *map[string]lp4k.Nodeclaimstruct, k8snodenamemap *map[string]string, reconcileIDmap *map[string][]string) {
 	// get the pods as ListItems
 	fmt.Fprintf(os.Stderr, "\nRetrieving pods from namespace \"%s\" with label \"%s\"\n", namespace, label)
 	pods, err := clientSet.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: label})
@@ -169,7 +169,7 @@ func CollectKarpenterLogs(ctx context.Context, clientSet *kubernetes.Clientset, 
 			os.Exit(1)
 		}
 		defer podLogs.Close()
-		go lp4k.NonBlockingParser(bufio.NewScanner(podLogs), nodeclaimmap, k8snodenamemap, "STDIN", 0)
+		go lp4k.NonBlockingParser(bufio.NewScanner(podLogs), nodeclaimmap, k8snodenamemap, reconcileIDmap, "STDIN", 0)
 	}
 	// read already existing ConfigMap in override mode only
 	if cmoverride {

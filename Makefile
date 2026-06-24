@@ -24,13 +24,13 @@ OS?=$(shell go env GOHOSTOS)
 ARCH?=$(shell go env GOHOSTARCH)
 
 BINARY=lp4k
-TOOLS=lp4kcm
+TOOL_CM=lp4kcm
+TOOL_CHAIN=lp4kchain
 
 INSTALLDIR=/usr/local/bin
 
 #GO_SOURCES=go.mod go.sum main.go ./k8s/k8s.go ./parser/parser.go
 GO_SOURCES=go.mod go.sum $(shell find . -type d -name tools -prune -o -name "*.go" -print)
-#TOOLS_SOURCES=go.mod go.sum ./tools/lp4kcm.go ./k8s/k8s.go ./parser/parser.go
 TOOLS_SOURCES=go.mod go.sum $(shell find . -type f -name main.go -prune -o -name "*.go" -print)
 
 ALL_ARCH_linux?=amd64 arm64
@@ -58,16 +58,19 @@ bin/$(BINARY): $(GO_SOURCES) | bin
 	CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) $(GO) build -mod=readonly -ldflags ${LDFLAGS} -o $@ .
 
 .PHONY: all
-all: bin/$(BINARY) bin/$(TOOLS)
+all: bin/$(BINARY) bin/$(TOOL_CM) bin/$(TOOL_CHAIN)
 
 .PHONY: tools
-tools: bin/$(TOOLS)
+tools: bin/$(TOOL_CM) bin/$(TOOL_CHAIN)
 
-bin/$(TOOLS): $(TOOLS_SOURCES) | bin
-	CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) $(GO) build -mod=readonly -ldflags ${LDFLAGS} -o $@  ./tools/
+bin/$(TOOL_CM): $(TOOLS_SOURCES) | bin
+	CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) $(GO) build -mod=readonly -ldflags ${LDFLAGS} -o $@ ./tools/lp4kcm/
+
+bin/$(TOOL_CHAIN): $(TOOLS_SOURCES) | bin
+	CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) $(GO) build -mod=readonly -ldflags ${LDFLAGS} -o $@ ./tools/lp4kchain/
 
 .PHONY: install
-install: bin/$(BINARY) bin/$(TOOLS)
+install: bin/$(BINARY) bin/$(TOOL_CM) bin/$(TOOL_CHAIN)
 	sudo cp bin/* $(INSTALLDIR)
 
 .PHONY: update

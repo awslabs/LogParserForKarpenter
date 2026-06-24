@@ -32,6 +32,8 @@ func main() {
 	nodeclaimmap = &nodeclaimes
 	k8snodenames := make(map[string]string)
 	k8snodenamemap = &k8snodenames
+	reconcileIDs := make(map[string][]string)
+	reconcileIDmap := &reconcileIDs
 
 	// if we only have CMD itself i.e. len(os.Args) == 1 we assume we get piped input and we check for STDIN
 	if len(os.Args) == 1 {
@@ -49,13 +51,13 @@ func main() {
 			ctx, clientSet := k8s.ConnectToK8s(kubeconfig)
 
 			// collect and parse logs
-			k8s.CollectKarpenterLogs(ctx, clientSet, nodeclaimmap, k8snodenamemap)
+			k8s.CollectKarpenterLogs(ctx, clientSet, nodeclaimmap, k8snodenamemap, reconcileIDmap)
 		} else {
 			fmt.Fprintf(os.Stderr, "Attached to STDIN - parsing input until EOF or Ctrl-C\n")
 			time.Sleep(1 * time.Second)
 
 			signal.Notify(make(chan os.Signal, 1), os.Interrupt, syscall.SIGTERM)
-			lp4k.ParseInput(os.Stdin, nodeclaimmap, k8snodenamemap, filename)
+			lp4k.ParseInput(os.Stdin, nodeclaimmap, k8snodenamemap, reconcileIDmap, filename)
 
 			// STDIN empty or Ctrl-C
 			fmt.Fprintf(os.Stderr, "Finished parsing STDIN\n\n")
@@ -82,7 +84,7 @@ func main() {
 			}
 			defer file.Close()
 
-			lp4k.ParseInput(file, nodeclaimmap, k8snodenamemap, filename)
+			lp4k.ParseInput(file, nodeclaimmap, k8snodenamemap, reconcileIDmap, filename)
 
 			fmt.Fprintf(os.Stderr, "Finished parsing input file %s\n\n", filename)
 		}
