@@ -186,11 +186,29 @@ Then run it like:
 ./bin/lp4kchain lp4k-output.csv output.png
 ```
 
+**Options:**
+
+| Flag | Default | Description |
+|---|---|---|
+| `--min-length` | 3 | Minimum chain length to display |
+| `--max-chains` | 12 | Maximum number of chains to display |
+| `--all` | false | Show all replacement chains (overrides `--min-length` and `--max-chains`) |
+
+```bash
+# Show all chains including short 1-to-1 replacements
+./bin/lp4kchain --all lp4k-output.csv output.png
+
+# Show chains with at least 4 nodes, up to 20 chains
+./bin/lp4kchain --min-length 4 --max-chains 20 lp4k-output.csv output.png
+```
+
 The diagram shows:
 - **Red nodes** — initial disrupted nodeclaims (chain start)
 - **Yellow nodes** — intermediate nodeclaims (replaced and are themselves replacements = churn)
 - **Blue nodes** — final nodeclaims (end of chain, still running)
-- **N-to-1 consolidations** — multiple nodes merged into one
+- **N-to-1 consolidations** — multiple nodes consolidated into one (arrow label: "consolidated")
+
+A legend and statistics table are included in the diagram showing total replacements, 1-to-1 vs N-to-1 counts, and how many nodeclaims are displayed out of the total.
 
 See [doc/lp4kchain-install.md](doc/lp4kchain-install.md) for mmdc installation instructions.
 

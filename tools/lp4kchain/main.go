@@ -4,6 +4,7 @@ package main
 
 import (
 	"encoding/csv"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -12,32 +13,45 @@ import (
 )
 
 func main() {
+	minLength := flag.Int("min-length", 3, "minimum chain length to display")
+	maxChains := flag.Int("max-chains", 12, "maximum number of chains to display")
+	showAll := flag.Bool("all", false, "show all replacement chains (overrides --min-length and --max-chains)")
+
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: lp4kchain [flags] [lp4k-output.csv] [output.mmd|output.png]\n")
+		fmt.Fprintf(os.Stderr, "\nReads lp4k CSV output and generates a Mermaid diagram of nodeclaim replacement chains.\n")
+		fmt.Fprintf(os.Stderr, "If no input file is given, reads from stdin.\n")
+		fmt.Fprintf(os.Stderr, "If output ends in .png, renders via mmdc (must be installed).\n")
+		fmt.Fprintf(os.Stderr, "If output ends in .mmd or is omitted, writes Mermaid source to stdout or file.\n")
+		fmt.Fprintf(os.Stderr, "\nFlags:\n")
+		flag.PrintDefaults()
+	}
+	flag.Parse()
+
+	if *showAll {
+		*minLength = 1
+		*maxChains = 0
+	}
+
+	// Remaining positional args after flags
+	args := flag.Args()
 	var outputFile string
 	var r io.Reader
 
-	switch len(os.Args) {
-	case 1:
-		// No arguments: read from stdin
+	switch len(args) {
+	case 0:
 		r = os.Stdin
-	case 2:
-		if os.Args[1] == "-h" || os.Args[1] == "--help" {
-			fmt.Fprintf(os.Stderr, "Usage: lp4kchain [lp4k-output.csv] [output.mmd|output.png]\n")
-			fmt.Fprintf(os.Stderr, "\nReads lp4k CSV output and generates a Mermaid diagram of nodeclaim replacement chains.\n")
-			fmt.Fprintf(os.Stderr, "If no input file is given, reads from stdin.\n")
-			fmt.Fprintf(os.Stderr, "If output ends in .png, renders via mmdc (must be installed).\n")
-			fmt.Fprintf(os.Stderr, "If output ends in .mmd or is omitted, writes Mermaid source to stdout or file.\n")
-			os.Exit(0)
-		}
-		r = nil // will open file below
+	case 1:
+		r = nil
 	default:
 		r = nil
-		outputFile = os.Args[2]
+		outputFile = args[1]
 	}
 
 	if r == nil {
-		f, err := os.Open(os.Args[1])
+		f, err := os.Open(args[0])
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error opening %s: %v\n", os.Args[1], err)
+			fmt.Fprintf(os.Stderr, "Error opening %s: %v\n", args[0], err)
 			os.Exit(1)
 		}
 		defer f.Close()
@@ -118,12 +132,6 @@ func main() {
 	for nc := range chains {
 		starts[nc] = true
 	}
-	for _, sources := range replacesMap {
-		for _, src := range sources {
-			// keep it as start only if it's not a replacement itself
-			_ = src
-		}
-	}
 	for nc := range replacesMap {
 		delete(starts, nc)
 	}
@@ -165,25 +173,27 @@ func main() {
 	mmd.WriteString("\n")
 
 	seen := make(map[string]bool)
+	seenEdges := make(map[string]bool)
 	shownChains := 0
-	maxChains := 12
 
 	for _, c := range allChains {
-		if len(c.nodes) < 3 {
+		if len(c.nodes) < *minLength {
 			continue
 		}
-		if shownChains >= maxChains {
+		if *maxChains > 0 && shownChains >= *maxChains {
 			break
 		}
-		// Skip if too much overlap with already shown nodes
-		overlap := 0
-		for _, nc := range c.nodes {
-			if seen[nc] {
-				overlap++
+		// Skip if too much overlap with already shown nodes (unless --all)
+		if !*showAll {
+			overlap := 0
+			for _, nc := range c.nodes {
+				if seen[nc] {
+					overlap++
+				}
 			}
-		}
-		if overlap > len(c.nodes)/2 {
-			continue
+			if overlap > len(c.nodes)/2 {
+				continue
+			}
 		}
 
 		shownChains++
@@ -208,18 +218,42 @@ func main() {
 		}
 
 		for i := 0; i < len(c.nodes)-1; i++ {
-			mmd.WriteString(fmt.Sprintf("    %s -->|replaced by| %s\n", c.nodes[i], c.nodes[i+1]))
+			edgeKey := c.nodes[i] + "->" + c.nodes[i+1]
+			if !seenEdges[edgeKey] {
+				mmd.WriteString(fmt.Sprintf("    %s -->|replaced by| %s\n", c.nodes[i], c.nodes[i+1]))
+				seenEdges[edgeKey] = true
+			}
 		}
 		mmd.WriteString("\n")
 	}
 
-	// Show N-to-1 consolidations (3+ sources)
+	// Show N-to-1 consolidations (only genuine multi-source merges not already shown in chains)
+	nTo1Limit := 4
+	if *showAll {
+		nTo1Limit = 0
+	}
 	nTo1Shown := 0
 	for nc, sources := range replacesMap {
-		if len(sources) < 3 || seen[nc] {
+		if len(sources) < 2 {
 			continue
 		}
-		if nTo1Shown >= 4 {
+		if !*showAll && len(sources) < 3 {
+			continue
+		}
+		// Skip if all nodes involved are already displayed in chains
+		if seen[nc] {
+			allSourcesSeen := true
+			for _, src := range sources {
+				if !seen[src] {
+					allSourcesSeen = false
+					break
+				}
+			}
+			if allSourcesSeen {
+				continue
+			}
+		}
+		if nTo1Limit > 0 && nTo1Shown >= nTo1Limit {
 			break
 		}
 		nTo1Shown++
@@ -233,8 +267,10 @@ func main() {
 		if len(info.createdTime) >= 19 {
 			ctime = info.createdTime[11:19]
 		}
-		mmd.WriteString(fmt.Sprintf("    %s[\"%s<br/>%s<br/>%s\"]\n", nc, nc, itype, ctime))
-		seen[nc] = true
+		if !seen[nc] {
+			mmd.WriteString(fmt.Sprintf("    %s[\"%s<br/>%s<br/>%s\"]\n", nc, nc, itype, ctime))
+			seen[nc] = true
+		}
 
 		for _, src := range sources {
 			if seen[src] {
@@ -253,7 +289,11 @@ func main() {
 				sitype = "?"
 			}
 			mmd.WriteString(fmt.Sprintf("    %s[\"%s<br/>%s<br/>%s\"]\n", src, src, sitype, sctime))
-			mmd.WriteString(fmt.Sprintf("    %s -->|consolidated| %s\n", src, nc))
+			edgeKey := src + "->" + nc
+			if !seenEdges[edgeKey] {
+				mmd.WriteString(fmt.Sprintf("    %s -->|consolidated| %s\n", src, nc))
+				seenEdges[edgeKey] = true
+			}
 			seen[src] = true
 		}
 		mmd.WriteString("\n")
@@ -276,6 +316,49 @@ func main() {
 		}
 	}
 
+	// Statistics
+	totalReplacements := len(chains)
+	oneToOne := 0
+	nToOne := 0
+	for _, sources := range replacesMap {
+		if len(sources) == 1 {
+			oneToOne++
+		} else {
+			nToOne++
+		}
+	}
+	totalChains := len(allChains)
+	longestChain := 0
+	if len(allChains) > 0 {
+		longestChain = len(allChains[0].nodes)
+	}
+	displayedEdges := 0
+	for _, c := range allChains {
+		for _, nc := range c.nodes {
+			if seen[nc] {
+				displayedEdges++
+			}
+		}
+	}
+
+	// Legend and statistics subgraph
+	mmd.WriteString("\n    %% Legend and Statistics\n")
+	mmd.WriteString("    subgraph Legend\n")
+	mmd.WriteString("        direction LR\n")
+	mmd.WriteString("        L1[\"Disrupted\\n(chain start)\"]:::disrupted\n")
+	mmd.WriteString("        L2[\"Intermediate\\n(churn)\"]:::intermediate\n")
+	mmd.WriteString("        L3[\"Final\\n(chain end)\"]:::final\n")
+	mmd.WriteString("        L1 ~~~ L2 ~~~ L3\n")
+	mmd.WriteString("    end\n")
+	mmd.WriteString("    subgraph Statistics\n")
+	mmd.WriteString("        direction LR\n")
+	mmd.WriteString(fmt.Sprintf("        S1[\"Total replacements: %d\"]\n", totalReplacements))
+	mmd.WriteString(fmt.Sprintf("        S2[\"1-to-1: %d | N-to-1: %d\"]\n", oneToOne, nToOne))
+	mmd.WriteString(fmt.Sprintf("        S3[\"Chains: %d | Longest: %d nodes\"]\n", totalChains, longestChain))
+	mmd.WriteString(fmt.Sprintf("        S4[\"Displayed: %d of %d nodeclaims\"]\n", len(seen), len(nodes)))
+	mmd.WriteString("        S1 ~~~ S2 ~~~ S3 ~~~ S4\n")
+	mmd.WriteString("    end\n")
+
 	mermaidContent := mmd.String()
 
 	// Output
@@ -290,7 +373,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Written Mermaid source to %s\n", outputFile)
 		}
 	} else if strings.HasSuffix(outputFile, ".png") || strings.HasSuffix(outputFile, ".svg") || strings.HasSuffix(outputFile, ".pdf") {
-		// Write temp .mmd file, then invoke mmdc
+		// Write .mmd file, then invoke mmdc
 		mmdPath := strings.TrimSuffix(outputFile, ".png")
 		mmdPath = strings.TrimSuffix(mmdPath, ".svg")
 		mmdPath = strings.TrimSuffix(mmdPath, ".pdf")
