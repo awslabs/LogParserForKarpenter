@@ -186,9 +186,13 @@ Then run it like:
 # Generate Markdown report to file
 ./bin/lp4kstats lp4k-output.csv report.md
 
-# Generate HTML report (rendered charts, no external tools needed)
+# Generate HTML report (recommended — fully rendered charts, no external tools needed)
 ./bin/lp4kstats lp4k-output.csv report.html
 ```
+
+**Output formats:**
+- **HTML** (`.html`) — self-contained report with Mermaid.js pie charts and Chart.js timeline graphs rendered in any browser. This is the recommended output format.
+- **Markdown** (`.md` or stdout) — Mermaid code blocks for pie charts (renderable in GitHub or Mermaid-capable viewers). Timeline charts are embedded as HTML comments and only render in the HTML output.
 
 The HTML report includes:
 - **Region overview** — total nodeclaims, interruption/disruption rates, pie charts by AZ and nodepool
