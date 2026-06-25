@@ -26,6 +26,7 @@ ARCH?=$(shell go env GOHOSTARCH)
 BINARY=lp4k
 TOOL_CM=lp4kcm
 TOOL_CHAIN=lp4kchain
+TOOL_STATS=lp4kstats
 
 INSTALLDIR=/usr/local/bin
 
@@ -58,10 +59,10 @@ bin/$(BINARY): $(GO_SOURCES) | bin
 	CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) $(GO) build -mod=readonly -ldflags ${LDFLAGS} -o $@ .
 
 .PHONY: all
-all: bin/$(BINARY) bin/$(TOOL_CM) bin/$(TOOL_CHAIN)
+all: bin/$(BINARY) bin/$(TOOL_CM) bin/$(TOOL_CHAIN) bin/$(TOOL_STATS)
 
 .PHONY: tools
-tools: bin/$(TOOL_CM) bin/$(TOOL_CHAIN)
+tools: bin/$(TOOL_CM) bin/$(TOOL_CHAIN) bin/$(TOOL_STATS)
 
 bin/$(TOOL_CM): $(TOOLS_SOURCES) | bin
 	CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) $(GO) build -mod=readonly -ldflags ${LDFLAGS} -o $@ ./tools/lp4kcm/
@@ -69,8 +70,11 @@ bin/$(TOOL_CM): $(TOOLS_SOURCES) | bin
 bin/$(TOOL_CHAIN): $(TOOLS_SOURCES) | bin
 	CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) $(GO) build -mod=readonly -ldflags ${LDFLAGS} -o $@ ./tools/lp4kchain/
 
+bin/$(TOOL_STATS): $(TOOLS_SOURCES) | bin
+	CGO_ENABLED=0 GOOS=$(OS) GOARCH=$(ARCH) $(GO) build -mod=readonly -ldflags ${LDFLAGS} -o $@ ./tools/lp4kstats/
+
 .PHONY: install
-install: bin/$(BINARY) bin/$(TOOL_CM) bin/$(TOOL_CHAIN)
+install: bin/$(BINARY) bin/$(TOOL_CM) bin/$(TOOL_CHAIN) bin/$(TOOL_STATS)
 	sudo cp bin/* $(INSTALLDIR)
 
 .PHONY: update

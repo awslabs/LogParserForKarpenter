@@ -164,14 +164,40 @@ Just run:
 ```bash
 make tools
 ```
-Binaries `lp4kcm` and `lp4kchain` for your OS and platform are built in directory `bin`.
+Binaries `lp4kcm`, `lp4kchain`, and `lp4kstats` for your OS and platform are built in directory `bin`.
 
 Then run it like:
 ```bash
 ./bin/lp4kcm <lp4k ConfigMap name 1> [... <lp4k ConfigMap name n>]
 ```
 
-### lp4kchain
+## Analyse LogParserForKarpenter output
+
+### Automated Analysis
+
+#### lp4kstats
+
+**lp4kstats** generates a statistics report from **lp4k** CSV output with Mermaid pie charts and Chart.js timeline graphs. The report provides a multi-dimensional view of nodeclaim activity: per region, per availability zone, and per nodepool — including spot interruptions, underutilized disruptions, empty disruptions, and instance type diversity (capacity pools).
+
+```bash
+# Generate Markdown report to stdout via pipe
+./bin/lp4k karpenter-logs.json | ./bin/lp4kstats
+
+# Generate Markdown report to file
+./bin/lp4kstats lp4k-output.csv report.md
+
+# Generate HTML report (rendered charts, no external tools needed)
+./bin/lp4kstats lp4k-output.csv report.html
+```
+
+The HTML report includes:
+- **Region overview** — total nodeclaims, interruption/disruption rates, pie charts by AZ and nodepool
+- **Per Availability Zone** — breakdown table with rates
+- **Per NodePool** — general stats, AZ drill-down, pie charts, capacity pool diversity (distinct instance types per AZ)
+- **Timeline charts** — spot interruptions, underutilized disruptions, and empty disruptions over time (one line per AZ)
+- **Instance type table** — per-AZ count with interruption annotations, collapsible for large datasets
+
+#### lp4kchain
 
 **lp4kchain** generates a Mermaid diagram visualizing nodeclaim replacement chains from **lp4k** CSV output. This helps identify cascading consolidation churn (see [karpenter-provider-aws#7146](https://github.com/aws/karpenter-provider-aws/issues/7146)).
 
@@ -214,8 +240,9 @@ See [doc/lp4kchain-install.md](doc/lp4kchain-install.md) for mmdc installation i
 
 ![Sample replacement chain diagram](lp4k-replacement-chains.png "Example lp4kchain output showing cascading consolidation churn")
 
-## Analyse LogParserForKarpenter output
-The simplest way for analysis is to use the output and parse it using standard Linux utilities like awk, cut and grep.
+### Manual Analysis
+
+The simplest way for manual analysis is to use the CSV output and parse it using standard Linux utilities like awk, cut and grep.
 ```console
 # indexed header
 $ head -1 sample-multi-file-lp4k-output.csv 
@@ -248,6 +275,7 @@ default-lpc62 50.935s 50.9
 default-j4lj7 43.617s 43.6
 default-mpz2w 46.277s 46.3
 ```
+
 [Amazon QuickSight](https://docs.aws.amazon.com/quicksight/latest/user/welcome.html) or Microsoft Excel are possible choices to use the CSV output for advanced analysis to create graphs and/or pivot tables.
 
 ![Sample 1](Quicksight_sample_graph.png
