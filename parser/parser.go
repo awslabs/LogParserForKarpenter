@@ -20,7 +20,13 @@ import (
 var header string
 
 var (
+	FilterStart string
+	FilterEnd   string
+)
+
+var (
 	replacer                  = strings.NewReplacer(", ", "|", " ", "", "(s)", "s")
+	timePattern               = regexp.MustCompile(`"time":"([^"]+)"`)
 	messagePattern            = regexp.MustCompile(`"message":"(.*)","commit"`)
 	reconcileIDPattern        = regexp.MustCompile(`"reconcileID":"([^"]+)"`)
 	controllerPattern         = regexp.MustCompile(`"controller":"([^"]+)"`)
@@ -163,6 +169,19 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 	var matchslice []string
 
 	inputline++
+
+	// Apply time range filter if set
+	if FilterStart != "" || FilterEnd != "" {
+		if timeMatch := timePattern.FindStringSubmatch(logline); timeMatch != nil {
+			if FilterStart != "" && timeMatch[1] < FilterStart {
+				return
+			}
+			if FilterEnd != "" && timeMatch[1] > FilterEnd {
+				return
+			}
+		}
+	}
+
 	matchslice = messagePattern.FindStringSubmatch(logline)
 	// process matchslice if we found a match
 	if matchslice != nil {

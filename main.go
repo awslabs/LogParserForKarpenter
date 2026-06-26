@@ -25,7 +25,20 @@ func main() {
 	var nodeclaimmap *map[string]lp4k.Nodeclaimstruct
 	// helper map of k8snodename to nodeclaim
 	var k8snodenamemap *map[string]string
-	//var inputline int
+
+	startTime := flag.String("start", "", "filter: only parse log lines at or after this timestamp (ISO 8601, e.g. 2026-06-18T12:00)")
+	endTime := flag.String("end", "", "filter: only parse log lines at or before this timestamp (ISO 8601, e.g. 2026-06-18T14:00)")
+	var kubeconfig *string
+	if home := homedir.HomeDir(); home != "" {
+		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
+	} else {
+		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+	}
+	flag.Parse()
+
+	// Set time range filter
+	lp4k.FilterStart = *startTime
+	lp4k.FilterEnd = *endTime
 
 	// intialize maps
 	nodeclaimes := make(map[string]lp4k.Nodeclaimstruct)
@@ -35,18 +48,10 @@ func main() {
 	reconcileIDs := make(map[string][]string)
 	reconcileIDmap := &reconcileIDs
 
-	// if we only have CMD itself i.e. len(os.Args) == 1 we assume we get piped input and we check for STDIN
-	if len(os.Args) == 1 {
+	// if we only have CMD itself i.e. no file args, we assume we get piped input and we check for STDIN
+	if flag.NArg() == 0 {
 		if termutil.Isatty(os.Stdin.Fd()) {
 			fmt.Fprintf(os.Stderr, "Nothing on STDIN - trying to connect to kube-apiserver\n\n")
-			// parse the .kubeconfig file
-			var kubeconfig *string
-			if home := homedir.HomeDir(); home != "" {
-				kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-			} else {
-				kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-			}
-			flag.Parse()
 
 			ctx, clientSet := k8s.ConnectToK8s(kubeconfig)
 
@@ -62,7 +67,10 @@ func main() {
 			// STDIN empty or Ctrl-C
 			fmt.Fprintf(os.Stderr, "Finished parsing STDIN\n\n")
 
-			// print nodeclaim output to STDOUT
+			// print time range and nodeclaim output to STDOUT
+			if minT, maxT := lp4k.TimeRange(nodeclaimmap); minT != "" {
+				fmt.Fprintf(os.Stderr, "Time range: %s to %s\n\n", minT, maxT)
+			}
 			lp4k.PrintSortedResult(nodeclaimmap)
 
 			// upload to S3 if configured
@@ -73,7 +81,7 @@ func main() {
 			}
 		}
 	} else {
-		for _, arg := range os.Args[1:] {
+		for _, arg := range flag.Args() {
 			filename = arg
 
 			fmt.Fprintf(os.Stderr, "Parsing input file %s\n", filename)
@@ -88,7 +96,10 @@ func main() {
 
 			fmt.Fprintf(os.Stderr, "Finished parsing input file %s\n\n", filename)
 		}
-		// print nodeclaim output to STDOUT
+		// print time range and nodeclaim output to STDOUT
+		if minT, maxT := lp4k.TimeRange(nodeclaimmap); minT != "" {
+			fmt.Fprintf(os.Stderr, "Time range: %s to %s\n\n", minT, maxT)
+		}
 		lp4k.PrintSortedResult(nodeclaimmap)
 
 		// upload to S3 if configured

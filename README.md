@@ -36,6 +36,21 @@ It allows using either STDIN (for example for piping live Karpenter controller l
 
 No flags are needed — the format is detected automatically for both file arguments and STDIN input.
 
+**Options:**
+
+| Flag | Default | Description |
+|---|---|---|
+| `--start` | (none) | Only parse log lines at or after this timestamp (ISO 8601, e.g. `2026-06-18T12:00`) |
+| `--end` | (none) | Only parse log lines at or before this timestamp (ISO 8601, e.g. `2026-06-18T14:00`) |
+
+```bash
+# Parse only events between 12:00 and 14:00
+./bin/lp4k --start 2026-06-18T12:00 --end 2026-06-18T14:00 karpenter-logs.json
+
+# Parse everything from 16:00 onwards
+cat karpenter-logs.json | ./bin/lp4k --start 2026-06-18T16:00
+```
+
 If neither STDIN nor log files are used as input, **lp4k** will attach to a running K8s/EKS cluster and parses Karpenter logs (streamed logs, similar to *kubectl logs -f* using LP4K_KARPENTER_NAMESPACE and LP4K_KARPENTER_LABEL) and creates a ConfigMap *lp4k-cm-\<date\>* in same namespace, which gets updated every LP4K_CM_UPDATE_FREQ.
 
 K8s handling can be configured using the following OS environment variables:
@@ -238,6 +253,8 @@ The diagram shows:
 - **Blue nodes** — final nodeclaims (end of chain, still running)
 - **Node box** — nodeclaim name, instance type, savings (hourly, on replacement nodes only), creation time
 - **Edge label** — disruption reason (e.g., "underutilized", "spot_interrupted")
+
+Only nodeclaims that participate in at least one replacement relationship are shown. Standalone nodes (never consolidated and never a replacement) are excluded since they have no chain edges to display.
 
 A legend and statistics table are included in the diagram showing total replacements, 1-to-1 vs N-to-1 counts, and how many nodeclaims are displayed out of the total.
 

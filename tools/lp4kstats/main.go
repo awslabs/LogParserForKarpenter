@@ -68,7 +68,7 @@ func main() {
 		colIdx[name] = i
 	}
 
-	requiredCols := []string{"Nodeclaim", "Nodepool", "Zone", "Capacitytype", "Instancetype", "Interruptionkind", "Disruptionreason", "Interruptiontime", "Disruptiontime"}
+	requiredCols := []string{"Nodeclaim", "Nodepool", "Zone", "Capacitytype", "Instancetype", "Interruptionkind", "Disruptionreason", "Interruptiontime", "Disruptiontime", "Savings", "Replaces"}
 	for _, col := range requiredCols {
 		if _, ok := colIdx[col]; !ok {
 			fmt.Fprintf(os.Stderr, "Error: CSV missing required column %q\n", col)
@@ -86,6 +86,8 @@ func main() {
 		disruptionReason string
 		interruptionTime string
 		disruptionTime   string
+		savings          string
+		replaces         string
 	}
 
 	var records []nodeclaimRecord
@@ -110,6 +112,8 @@ func main() {
 			disruptionReason: row[colIdx["Disruptionreason"]],
 			interruptionTime: row[colIdx["Interruptiontime"]],
 			disruptionTime:   row[colIdx["Disruptiontime"]],
+			savings:          row[colIdx["Savings"]],
+			replaces:         row[colIdx["Replaces"]],
 		})
 	}
 
@@ -228,6 +232,25 @@ func main() {
 		}
 	}
 
+	// Accumulate consolidation savings
+	regionSavings := make(map[string]float64)
+
+	for _, rec := range records {
+		if rec.savings == "" || rec.replaces == "" {
+			continue
+		}
+		savingsVal := 0.0
+		fmt.Sscanf(rec.savings, "%f", &savingsVal)
+		if savingsVal == 0 {
+			continue
+		}
+		if rec.zone == "" {
+			continue
+		}
+		region := rec.zone[:len(rec.zone)-1]
+		regionSavings[region] += savingsVal
+	}
+
 	// Sort regions
 	sortedRegions := make([]string, 0, len(regions))
 	for r := range regions {
@@ -242,6 +265,8 @@ func main() {
 
 	for _, region := range sortedRegions {
 		md.WriteString(fmt.Sprintf("## Region: %s\n\n", region))
+		md.WriteString("<!-- tables-row -->\n\n")
+		md.WriteString("#### Overview\n\n")
 		md.WriteString(fmt.Sprintf("| Metric | Value |\n"))
 		md.WriteString(fmt.Sprintf("|--------|-------|\n"))
 		md.WriteString(fmt.Sprintf("| Total NodeClaims | %d |\n", regionTotal[region]))
@@ -263,8 +288,19 @@ func main() {
 		md.WriteString("\n")
 
 		if noZoneCount > 0 {
-			md.WriteString(fmt.Sprintf("*Note: %d NodeClaim(s) without an AZ (never launched) excluded from statistics.*\n\n", noZoneCount))
+			md.WriteString(fmt.Sprintf("*Note: %d NodeClaim(s) without an AZ excluded from statistics.*\n\n", noZoneCount))
 		}
+
+		// Savings table
+		if savings := regionSavings[region]; savings > 0 {
+			md.WriteString("#### Consolidation Savings\n\n")
+			md.WriteString("| Metric | Value |\n")
+			md.WriteString("|--------|-------|\n")
+			md.WriteString(fmt.Sprintf("| Total ($/hr) | $%.2f |\n", savings))
+			md.WriteString("\n")
+			md.WriteString("*Achieved by consolidation of underutilized nodes.*\n\n")
+		}
+		md.WriteString("<!-- /tables-row -->\n\n")
 
 		azStats := regionAZ[region]
 		sortedAZs := sortedKeys(azStats)
@@ -583,8 +619,9 @@ func main() {
 			// Timeline charts for this pool
 			{
 				type timeEvent struct {
-					t  time.Time
-					az string
+					t            time.Time
+					az           string
+					instanceType string
 				}
 				var interruptEvents []timeEvent
 				var underutilEvents []timeEvent
@@ -597,7 +634,7 @@ func main() {
 					if rec.interruptKind == "spot_interrupted" && rec.interruptionTime != "" {
 						t, err := time.Parse(time.RFC3339Nano, rec.interruptionTime)
 						if err == nil {
-							interruptEvents = append(interruptEvents, timeEvent{t: t, az: rec.zone})
+							interruptEvents = append(interruptEvents, timeEvent{t: t, az: rec.zone, instanceType: rec.instanceType})
 						}
 					}
 					if rec.disruptionReason == "underutilized" && rec.disruptionTime != "" {
@@ -727,6 +764,53 @@ func main() {
 						md.WriteString(fmt.Sprintf("#### %s — Empty Disruptions Timeline\n\n", pool))
 						md.WriteString("<!-- placeholder: No Empty Disruptions data -->\n\n")
 					}
+
+					// Top interrupted instance type per AZ timeline
+					if len(interruptEvents) > 0 {
+						// Find the most-interrupted instance type per AZ
+						azInstanceCount := make(map[string]map[string]int) // az -> instanceType -> count
+						for _, e := range interruptEvents {
+							if azInstanceCount[e.az] == nil {
+								azInstanceCount[e.az] = make(map[string]int)
+							}
+							azInstanceCount[e.az][e.instanceType]++
+						}
+						topInstancePerAZ := make(map[string]string) // az -> top instance type
+						for az, instances := range azInstanceCount {
+							maxCount := 0
+							for itype, count := range instances {
+								if count > maxCount {
+									maxCount = count
+									topInstancePerAZ[az] = itype
+								}
+							}
+						}
+
+						// Build buckets for the top instance type per AZ
+						azBuckets := make(map[string][]int)
+						for _, az := range sortedPoolAZs {
+							azBuckets[az] = make([]int, numBuckets)
+						}
+						for _, e := range interruptEvents {
+							if e.instanceType == topInstancePerAZ[e.az] {
+								azBuckets[e.az][bucketIdx(e.t)]++
+							}
+						}
+
+						md.WriteString(fmt.Sprintf("#### %s — Top Interrupted Instance Type per AZ Timeline\n\n", pool))
+						md.WriteString("<!-- chartjs\n")
+						md.WriteString("title: Top Interrupted Instance Type per AZ per 10min\n")
+						md.WriteString(fmt.Sprintf("labels: %s\n", strings.Join(xLabels, ",")))
+						for _, az := range sortedPoolAZs {
+							if topInstancePerAZ[az] != "" {
+								md.WriteString(fmt.Sprintf("series: %s (%s): %s\n", az, topInstancePerAZ[az], intSliceToString(azBuckets[az])))
+							}
+						}
+						md.WriteString("/chartjs -->\n\n")
+					} else {
+						md.WriteString(fmt.Sprintf("#### %s — Top Interrupted Instance Type per AZ Timeline\n\n", pool))
+						md.WriteString("<!-- placeholder: No Spot Interruptions data -->\n\n")
+					}
 				} else {
 					// No events at all for this pool
 					md.WriteString(fmt.Sprintf("#### %s — Spot Interruptions Timeline\n\n", pool))
@@ -735,6 +819,8 @@ func main() {
 					md.WriteString("<!-- placeholder: No Underutilized Disruptions data -->\n\n")
 					md.WriteString(fmt.Sprintf("#### %s — Empty Disruptions Timeline\n\n", pool))
 					md.WriteString("<!-- placeholder: No Empty Disruptions data -->\n\n")
+					md.WriteString(fmt.Sprintf("#### %s — Top Interrupted Instance Type per AZ Timeline\n\n", pool))
+					md.WriteString("<!-- placeholder: No Spot Interruptions data -->\n\n")
 				}
 			}
 		}
