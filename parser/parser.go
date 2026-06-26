@@ -25,6 +25,7 @@ var (
 	reconcileIDPattern        = regexp.MustCompile(`"reconcileID":"([^"]+)"`)
 	controllerPattern         = regexp.MustCompile(`"controller":"([^"]+)"`)
 	disruptedNodeclaimPattern = regexp.MustCompile(`"NodeClaim":{"name":"([^"]+)"},"capacity-type"`)
+	savingsPattern           = regexp.MustCompile(`\(savings: \$([0-9]+\.[0-9]+)\)`)
 	createdPattern            = regexp.MustCompile(`"time":"(.*)","logger".*"NodePool":{"name":"(.*)"},"NodeClaim":{"name":"(.*)"},"requests".*"instance-types":"(.*)"`)
 	launchedPattern           = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},.*"provider-id":"(.*)","instance-type":"(.*)","zone":"(.*)","capacity-type":"(.*)","allocatable"`)
 	registeredPattern         = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},.*,"Node":{"name":"(.*)"`)
@@ -61,6 +62,7 @@ type Nodeclaimstruct struct {
 	Disruptednodecount     string
 	Replacementnodecount   string
 	Disruptedpodcount      string
+	Savings                string
 	Replacedby             string
 	Replaces               string
 	Annotationtime         string
@@ -190,6 +192,7 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 				}
 				// check if this is a replacement nodeclaim (controller == "disruption" and reconcileID links to disrupted nodeclaims)
 				var replaces string
+				var savings string
 				if ctrlMatch := matchPattern(controllerPattern, logline); ctrlMatch != nil && ctrlMatch[1] == "disruption" {
 					if ridMatch := matchPattern(reconcileIDPattern, logline); ridMatch != nil {
 						if disruptedNames, ok := (*reconcileIDmap)[ridMatch[1]]; ok {
@@ -202,6 +205,11 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 								}
 							}
 							delete(*reconcileIDmap, ridMatch[1])
+						}
+						// retrieve savings for this reconcileID (belongs to the replacement node)
+						if savingsSlice, ok := (*reconcileIDmap)["savings:"+ridMatch[1]]; ok {
+							savings = savingsSlice[0]
+							delete(*reconcileIDmap, "savings:"+ridMatch[1])
 						}
 					}
 				}
@@ -227,6 +235,7 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 					Disruptednodecount:     "",
 					Replacementnodecount:   "",
 					Disruptedpodcount:      "",
+					Savings:                savings,
 					Replacedby:             "",
 					Replaces:               replaces,
 					Annotationtime:         "",
@@ -319,30 +328,46 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 				isCommandField = true
 			}
 			if matchslicesub != nil {
-				if nodeclaim = matchslicesub[7]; nodeclaim == "" {
-					fmt.Fprintf(os.Stderr, "Parsing error empty \"NodeClaim\" for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
-				} else if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
-					entry.Disruptiontime = matchslicesub[1]
-					if isCommandField {
-						if idx := strings.IndexByte(matchslicesub[2], '/'); idx > 0 {
-							entry.Disruptionreason = strings.ToLower(matchslicesub[2][:idx])
-						}
-					} else {
-						entry.Disruptionreason = matchslicesub[2]
+				// extract disruption reason and savings from the match
+				var disruptionReason string
+				var savings string
+				if isCommandField {
+					if idx := strings.IndexByte(matchslicesub[2], '/'); idx > 0 {
+						disruptionReason = strings.ToLower(matchslicesub[2][:idx])
 					}
-					entry.Disruptiondecision = matchslicesub[3]
-					entry.Disruptednodecount = matchslicesub[4]
-					entry.Replacementnodecount = matchslicesub[5]
-					entry.Disruptedpodcount = matchslicesub[6]
-					(*nodeclaimmap)[nodeclaim] = entry
+					if savingsMatch := savingsPattern.FindStringSubmatch(matchslicesub[2]); savingsMatch != nil {
+						savings = savingsMatch[1]
+					}
+				} else {
+					disruptionReason = matchslicesub[2]
+				}
+
+				// apply disruption info to ALL disrupted nodeclaims in this log line
+				allDisrupted := disruptedNodeclaimPattern.FindAllStringSubmatch(logline, -1)
+				if len(allDisrupted) == 0 {
+					fmt.Fprintf(os.Stderr, "Parsing error: no NodeClaim found in disrupted-nodes for message \"%s\" in line %d in %s\n", matchslice[1], inputline, filename)
+				}
+				for _, m := range allDisrupted {
+					nodeclaim = m[1]
+					if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
+						entry.Disruptiontime = matchslicesub[1]
+						entry.Disruptionreason = disruptionReason
+						entry.Disruptiondecision = matchslicesub[3]
+						entry.Disruptednodecount = matchslicesub[4]
+						entry.Replacementnodecount = matchslicesub[5]
+						entry.Disruptedpodcount = matchslicesub[6]
+						(*nodeclaimmap)[nodeclaim] = entry
+					}
 				}
 				// track reconcileID for replace decisions to link disrupted nodeclaims to their replacement
 				if matchslicesub[3] == "replace" {
 					if ridMatch := matchPattern(reconcileIDPattern, logline); ridMatch != nil {
-						// extract all disrupted nodeclaim names from the line (handles multi-node consolidation)
-						allDisrupted := disruptedNodeclaimPattern.FindAllStringSubmatch(logline, -1)
 						for _, m := range allDisrupted {
 							(*reconcileIDmap)[ridMatch[1]] = append((*reconcileIDmap)[ridMatch[1]], m[1])
+						}
+						// store savings keyed by reconcileID with a special prefix
+						if savings != "" {
+							(*reconcileIDmap)["savings:"+ridMatch[1]] = []string{savings}
 						}
 					}
 				}

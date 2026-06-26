@@ -236,7 +236,8 @@ The diagram shows:
 - **Red nodes** — initial disrupted nodeclaims (chain start)
 - **Yellow nodes** — intermediate nodeclaims (replaced and are themselves replacements = churn)
 - **Blue nodes** — final nodeclaims (end of chain, still running)
-- **N-to-1 consolidations** — multiple nodes consolidated into one (arrow label: "consolidated")
+- **Node box** — nodeclaim name, instance type, savings (hourly, on replacement nodes only), creation time
+- **Edge label** — disruption reason (e.g., "underutilized", "spot_interrupted")
 
 A legend and statistics table are included in the diagram showing total replacements, 1-to-1 vs N-to-1 counts, and how many nodeclaims are displayed out of the total.
 
