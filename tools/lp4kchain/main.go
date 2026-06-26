@@ -72,7 +72,7 @@ func main() {
 		colIdx[name] = i
 	}
 
-	requiredCols := []string{"Replacedby", "Replaces", "Instancetype", "Createdtime", "Disruptiontime"}
+	requiredCols := []string{"Replacedby", "Replaces", "Instancetype", "Createdtime", "Disruptiontime", "Disruptionreason", "Interruptionkind", "Savings"}
 	for _, col := range requiredCols {
 		if _, ok := colIdx[col]; !ok {
 			fmt.Fprintf(os.Stderr, "Error: CSV missing required column %q\n", col)
@@ -81,11 +81,14 @@ func main() {
 	}
 
 	type nodeInfo struct {
-		instanceType   string
-		createdTime    string
-		disruptionTime string
-		replacedBy     string
-		replaces       []string
+		instanceType     string
+		createdTime      string
+		disruptionTime   string
+		disruptionReason string
+		interruptionKind string
+		savings          string
+		replacedBy       string
+		replaces         []string
 	}
 
 	nodes := make(map[string]*nodeInfo)
@@ -103,10 +106,13 @@ func main() {
 
 		nc := row[0]
 		info := &nodeInfo{
-			instanceType:   row[colIdx["Instancetype"]],
-			createdTime:    row[colIdx["Createdtime"]],
-			disruptionTime: row[colIdx["Disruptiontime"]],
-			replacedBy:     row[colIdx["Replacedby"]],
+			instanceType:     row[colIdx["Instancetype"]],
+			createdTime:      row[colIdx["Createdtime"]],
+			disruptionTime:   row[colIdx["Disruptiontime"]],
+			disruptionReason: row[colIdx["Disruptionreason"]],
+			interruptionKind: row[colIdx["Interruptionkind"]],
+			savings:          row[colIdx["Savings"]],
+			replacedBy:       row[colIdx["Replacedby"]],
 		}
 		if rp := row[colIdx["Replaces"]]; rp != "" {
 			info.replaces = strings.Split(rp, "|")
@@ -184,6 +190,7 @@ func main() {
 			break
 		}
 		// Skip if too much overlap with already shown nodes (unless --all)
+		// But still render the converging edge from the unseen start to the first seen node
 		if !*showAll {
 			overlap := 0
 			for _, nc := range c.nodes {
@@ -192,6 +199,62 @@ func main() {
 				}
 			}
 			if overlap > len(c.nodes)/2 {
+				// Find the first unseen prefix that converges into an already-shown node
+				for i := 0; i < len(c.nodes)-1; i++ {
+					if !seen[c.nodes[i]] && seen[c.nodes[i+1]] {
+						// Render the unseen node(s) leading up to the merge point
+						for j := 0; j <= i; j++ {
+							if !seen[c.nodes[j]] {
+								info := nodes[c.nodes[j]]
+								itype := info.instanceType
+								if itype == "" {
+									itype = "?"
+								}
+								savings := ""
+								if info.savings != "" {
+									savings = "$" + info.savings
+								}
+								ctime := ""
+								if len(info.createdTime) >= 19 {
+									ctime = info.createdTime[11:19]
+								}
+								label := fmt.Sprintf("%s<br/>%s<br/>%s<br/>%s", c.nodes[j], itype, savings, ctime)
+								mmd.WriteString(fmt.Sprintf("    %s[\"%s\"]\n", c.nodes[j], label))
+								seen[c.nodes[j]] = true
+							}
+							if j < i {
+								edgeKey := c.nodes[j] + "->" + c.nodes[j+1]
+								if !seenEdges[edgeKey] {
+									edgeLabel := "replaced by"
+									if srcInfo := nodes[c.nodes[j]]; srcInfo != nil {
+										if srcInfo.disruptionReason != "" {
+											edgeLabel = srcInfo.disruptionReason
+										} else if srcInfo.interruptionKind != "" {
+											edgeLabel = srcInfo.interruptionKind
+										}
+									}
+									mmd.WriteString(fmt.Sprintf("    %s -->|%s| %s\n", c.nodes[j], edgeLabel, c.nodes[j+1]))
+									seenEdges[edgeKey] = true
+								}
+							}
+						}
+						// Render the converging edge into the already-shown node
+						edgeKey := c.nodes[i] + "->" + c.nodes[i+1]
+						if !seenEdges[edgeKey] {
+							edgeLabel := "replaced by"
+							if srcInfo := nodes[c.nodes[i]]; srcInfo != nil {
+								if srcInfo.disruptionReason != "" {
+									edgeLabel = srcInfo.disruptionReason
+								} else if srcInfo.interruptionKind != "" {
+									edgeLabel = srcInfo.interruptionKind
+								}
+							}
+							mmd.WriteString(fmt.Sprintf("    %s -->|%s| %s\n", c.nodes[i], edgeLabel, c.nodes[i+1]))
+							seenEdges[edgeKey] = true
+						}
+						break
+					}
+				}
 				continue
 			}
 		}
@@ -208,11 +271,15 @@ func main() {
 			if itype == "" {
 				itype = "?"
 			}
+			savings := ""
+			if info.savings != "" {
+				savings = "$" + info.savings
+			}
 			ctime := ""
 			if len(info.createdTime) >= 19 {
 				ctime = info.createdTime[11:19]
 			}
-			label := fmt.Sprintf("%s<br/>%s<br/>%s", nc, itype, ctime)
+			label := fmt.Sprintf("%s<br/>%s<br/>%s<br/>%s", nc, itype, savings, ctime)
 			mmd.WriteString(fmt.Sprintf("    %s[\"%s\"]\n", nc, label))
 			seen[nc] = true
 		}
@@ -220,7 +287,15 @@ func main() {
 		for i := 0; i < len(c.nodes)-1; i++ {
 			edgeKey := c.nodes[i] + "->" + c.nodes[i+1]
 			if !seenEdges[edgeKey] {
-				mmd.WriteString(fmt.Sprintf("    %s -->|replaced by| %s\n", c.nodes[i], c.nodes[i+1]))
+				edgeLabel := "replaced by"
+				if srcInfo := nodes[c.nodes[i]]; srcInfo != nil {
+					if srcInfo.disruptionReason != "" {
+						edgeLabel = srcInfo.disruptionReason
+					} else if srcInfo.interruptionKind != "" {
+						edgeLabel = srcInfo.interruptionKind
+					}
+				}
+				mmd.WriteString(fmt.Sprintf("    %s -->|%s| %s\n", c.nodes[i], edgeLabel, c.nodes[i+1]))
 				seenEdges[edgeKey] = true
 			}
 		}
@@ -263,12 +338,16 @@ func main() {
 		if itype == "" {
 			itype = "?"
 		}
+		savings := ""
+		if info.savings != "" {
+			savings = "$" + info.savings
+		}
 		ctime := ""
 		if len(info.createdTime) >= 19 {
 			ctime = info.createdTime[11:19]
 		}
 		if !seen[nc] {
-			mmd.WriteString(fmt.Sprintf("    %s[\"%s<br/>%s<br/>%s\"]\n", nc, nc, itype, ctime))
+			mmd.WriteString(fmt.Sprintf("    %s[\"%s<br/>%s<br/>%s<br/>%s\"]\n", nc, nc, itype, savings, ctime))
 			seen[nc] = true
 		}
 
@@ -278,9 +357,13 @@ func main() {
 			}
 			srcInfo := nodes[src]
 			sitype := ""
+			ssavings := ""
 			sctime := ""
 			if srcInfo != nil {
 				sitype = srcInfo.instanceType
+				if srcInfo.savings != "" {
+					ssavings = "$" + srcInfo.savings
+				}
 				if len(srcInfo.createdTime) >= 19 {
 					sctime = srcInfo.createdTime[11:19]
 				}
@@ -288,10 +371,18 @@ func main() {
 			if sitype == "" {
 				sitype = "?"
 			}
-			mmd.WriteString(fmt.Sprintf("    %s[\"%s<br/>%s<br/>%s\"]\n", src, src, sitype, sctime))
+			mmd.WriteString(fmt.Sprintf("    %s[\"%s<br/>%s<br/>%s<br/>%s\"]\n", src, src, sitype, ssavings, sctime))
 			edgeKey := src + "->" + nc
 			if !seenEdges[edgeKey] {
-				mmd.WriteString(fmt.Sprintf("    %s -->|consolidated| %s\n", src, nc))
+				edgeLabel := "consolidated"
+				if srcInfo != nil {
+					if srcInfo.disruptionReason != "" {
+						edgeLabel = srcInfo.disruptionReason
+					} else if srcInfo.interruptionKind != "" {
+						edgeLabel = srcInfo.interruptionKind
+					}
+				}
+				mmd.WriteString(fmt.Sprintf("    %s -->|%s| %s\n", src, edgeLabel, nc))
 				seenEdges[edgeKey] = true
 			}
 			seen[src] = true
