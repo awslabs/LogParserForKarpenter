@@ -115,6 +115,35 @@ func ConvertResult(nodeclaimmap *map[string]Nodeclaimstruct) map[string]string {
 	return keyvalueMap
 }
 
+// TimeRange returns the earliest and latest timestamps found in the nodeclaimmap.
+func TimeRange(nodeclaimmap *map[string]Nodeclaimstruct) (string, string) {
+	var minTime, maxTime string
+	for _, entry := range *nodeclaimmap {
+		times := []string{
+			entry.Createdtime,
+			entry.Launchedtime,
+			entry.Registeredtime,
+			entry.Initializedtime,
+			entry.Disruptiontime,
+			entry.Annotationtime,
+			entry.Tainttime,
+			entry.Deletedtime,
+		}
+		for _, t := range times {
+			if t == "" {
+				continue
+			}
+			if minTime == "" || t < minTime {
+				minTime = t
+			}
+			if maxTime == "" || t > maxTime {
+				maxTime = t
+			}
+		}
+	}
+	return minTime, maxTime
+}
+
 // ParseInput detects the input format and parses it with the appropriate parser.
 // Works with any io.Reader including os.Stdin.
 func ParseInput(r io.Reader, nodeclaimmap *map[string]Nodeclaimstruct, k8snodenamemap *map[string]string, reconcileIDmap *map[string][]string, filename string) {
