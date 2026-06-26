@@ -133,13 +133,20 @@ func main() {
 		}
 	}
 
-	// Find chain starts (disrupted but not themselves a replacement)
+	// Find chain starts (disrupted but not themselves a replacement that's reachable)
+	// A node is reachable if another node's Replacedby points to it
+	reachable := make(map[string]bool)
+	for _, target := range chains {
+		reachable[target] = true
+	}
 	starts := make(map[string]bool)
 	for nc := range chains {
 		starts[nc] = true
 	}
 	for nc := range replacesMap {
-		delete(starts, nc)
+		if reachable[nc] {
+			delete(starts, nc)
+		}
 	}
 
 	// Build full chains from starts

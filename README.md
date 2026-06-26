@@ -254,6 +254,8 @@ The diagram shows:
 - **Node box** — nodeclaim name, instance type, savings (hourly, on replacement nodes only), creation time
 - **Edge label** — disruption reason (e.g., "underutilized", "spot_interrupted")
 
+Only nodeclaims that participate in at least one replacement relationship are shown. Standalone nodes (never consolidated and never a replacement) are excluded since they have no chain edges to display.
+
 A legend and statistics table are included in the diagram showing total replacements, 1-to-1 vs N-to-1 counts, and how many nodeclaims are displayed out of the total.
 
 See [doc/lp4kchain-install.md](doc/lp4kchain-install.md) for mmdc installation instructions.
