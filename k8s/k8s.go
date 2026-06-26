@@ -68,8 +68,13 @@ func getEnvBool(key string, defaultVal bool) bool {
 	return b
 }
 
-func ConnectToK8s(kubeconfig *string) (context.Context, *kubernetes.Clientset) {
-	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+func ConnectToK8s(kubeconfig *string, k8sContext string) (context.Context, *kubernetes.Clientset) {
+	loadingRules := &clientcmd.ClientConfigLoadingRules{ExplicitPath: *kubeconfig}
+	overrides := &clientcmd.ConfigOverrides{}
+	if k8sContext != "" {
+		overrides.CurrentContext = k8sContext
+	}
+	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides).ClientConfig()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to build config from flags - %s\n", err.Error())
 		os.Exit(1)

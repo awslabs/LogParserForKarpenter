@@ -28,12 +28,16 @@ func main() {
 
 	startTime := flag.String("start", "", "filter: only parse log lines at or after this timestamp (ISO 8601, e.g. 2026-06-18T12:00)")
 	endTime := flag.String("end", "", "filter: only parse log lines at or before this timestamp (ISO 8601, e.g. 2026-06-18T14:00)")
+	contextDefault := os.Getenv("LP4K_K8S_CONTEXT")
+	k8sContext := flag.String("context", contextDefault, "Kubernetes context to use (overrides current-context, env: LP4K_K8S_CONTEXT)")
 	var kubeconfig *string
-	if home := homedir.HomeDir(); home != "" {
-		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-	} else {
-		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+	kubeconfigDefault := os.Getenv("KUBECONFIG")
+	if kubeconfigDefault == "" {
+		if home := homedir.HomeDir(); home != "" {
+			kubeconfigDefault = filepath.Join(home, ".kube", "config")
+		}
 	}
+	kubeconfig = flag.String("kubeconfig", kubeconfigDefault, "(optional) absolute path to the kubeconfig file (env: KUBECONFIG)")
 	flag.Parse()
 
 	// Set time range filter
@@ -53,7 +57,7 @@ func main() {
 		if termutil.Isatty(os.Stdin.Fd()) {
 			fmt.Fprintf(os.Stderr, "Nothing on STDIN - trying to connect to kube-apiserver\n\n")
 
-			ctx, clientSet := k8s.ConnectToK8s(kubeconfig)
+			ctx, clientSet := k8s.ConnectToK8s(kubeconfig, *k8sContext)
 
 			// collect and parse logs
 			k8s.CollectKarpenterLogs(ctx, clientSet, nodeclaimmap, k8snodenamemap, reconcileIDmap)
