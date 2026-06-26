@@ -37,7 +37,7 @@ func main() {
 
 	ctx, clientSet := k8s.ConnectToK8s(kubeconfig)
 
-	for _, arg := range os.Args[1:] {
+	for _, arg := range flag.Args() {
 		cmname = arg
 
 		fmt.Fprintf(os.Stderr, "\nParsing ConfigMap %s\n", cmname)
