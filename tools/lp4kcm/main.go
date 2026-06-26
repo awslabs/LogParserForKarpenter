@@ -28,14 +28,18 @@ func main() {
 
 	// parse the .kubeconfig file
 	var kubeconfig *string
-	if home := homedir.HomeDir(); home != "" {
-		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-	} else {
-		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+	kubeconfigDefault := os.Getenv("KUBECONFIG")
+	if kubeconfigDefault == "" {
+		if home := homedir.HomeDir(); home != "" {
+			kubeconfigDefault = filepath.Join(home, ".kube", "config")
+		}
 	}
+	kubeconfig = flag.String("kubeconfig", kubeconfigDefault, "(optional) absolute path to the kubeconfig file (env: KUBECONFIG)")
+	contextDefault := os.Getenv("LP4K_K8S_CONTEXT")
+	k8sContext := flag.String("context", contextDefault, "Kubernetes context to use (overrides current-context, env: LP4K_K8S_CONTEXT)")
 	flag.Parse()
 
-	ctx, clientSet := k8s.ConnectToK8s(kubeconfig)
+	ctx, clientSet := k8s.ConnectToK8s(kubeconfig, *k8sContext)
 
 	for _, arg := range flag.Args() {
 		cmname = arg

@@ -40,8 +40,10 @@ No flags are needed — the format is detected automatically for both file argum
 
 | Flag | Default | Description |
 |---|---|---|
-| `--start` | (none) | Only parse log lines at or after this timestamp (ISO 8601, e.g. `2026-06-18T12:00`) |
-| `--end` | (none) | Only parse log lines at or before this timestamp (ISO 8601, e.g. `2026-06-18T14:00`) |
+| `--start` | (none) | Filter: only parse log lines at or after this ISO 8601 timestamp |
+| `--end` | (none) | Filter: only parse log lines at or before this ISO 8601 timestamp |
+| `--kubeconfig` | `~/.kube/config` | Path to kubeconfig file (env: `KUBECONFIG`) |
+| `--context` | (none) | Kubernetes context to use (env: `LP4K_K8S_CONTEXT`) |
 
 ```bash
 # Parse only events between 12:00 and 14:00
@@ -57,6 +59,7 @@ K8s handling can be configured using the following OS environment variables:
 
 | Environment variable      | Default value     | Description
 | ------------- | ------------- | ------------- |
+| LP4K_K8S_CONTEXT | "" (current-context) | Kubernetes context to use from kubeconfig (useful with multiple clusters or tools like [kubie](https://github.com/kubie-org/kubie))
 | LP4K_KARPENTER_NAMESPACE | "kube-system" | K8s namespace where Karpenter controller is running
 | LP4K_KARPENTER_LABEL | "app.kubernetes.io/name=karpenter" | Karpenter controller K8s pod labels
 | LP4K_CM_UPDATE_FREQ | "30s" | update frequency of ConfigMap and STDOUT if enabled (default), must be valid Go time.Duration string like "30s" or 2m30s"
@@ -184,6 +187,21 @@ Binaries `lp4kcm`, `lp4kchain`, and `lp4kstats` for your OS and platform are bui
 Then run it like:
 ```bash
 ./bin/lp4kcm <lp4k ConfigMap name 1> [... <lp4k ConfigMap name n>]
+```
+
+**Options:**
+
+| Flag | Default | Description |
+|---|---|---|
+| `--kubeconfig` | `~/.kube/config` | Path to kubeconfig file (env: `KUBECONFIG`) |
+| `--context` | (none) | Kubernetes context to use (env: `LP4K_K8S_CONTEXT`) |
+
+```bash
+# Read ConfigMap from a specific context
+./bin/lp4kcm --context=my-cluster lp4k-cm-2026-06-22-07-54-36
+
+# Or use the environment variable
+LP4K_K8S_CONTEXT=my-cluster ./bin/lp4kcm lp4k-cm-2026-06-22-07-54-36
 ```
 
 ## Analyse LogParserForKarpenter output
