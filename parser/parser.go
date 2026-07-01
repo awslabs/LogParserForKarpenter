@@ -34,6 +34,8 @@ var (
 	savingsPattern           = regexp.MustCompile(`\(savings: \$([0-9]+\.[0-9]+)\)`)
 	createdPattern            = regexp.MustCompile(`"time":"(.*)","logger".*"NodePool":{"name":"(.*)"},"NodeClaim":{"name":"(.*)"},"requests".*"instance-types":"(.*)"`)
 	launchedPattern           = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},.*"provider-id":"(.*)","instance-type":"(.*)","zone":"(.*)","capacity-type":"(.*)","allocatable"`)
+	failedLaunchPattern       = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},"namespace".*"aws-error-code":"([^"]*)"`)
+
 	registeredPattern         = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},.*,"Node":{"name":"(.*)"`)
 	initializedPattern        = regexp.MustCompile(`"time":"(.*)","logger".*"NodeClaim":{"name":"(.*)"},"namespace"`)
 	disruptingReasonPattern   = regexp.MustCompile(`"time":"(.*)","logger".*"reason":"(.*)","decision":"(.*)","disrupted-node-count":(.*),"replacement-node-count":(.*),"pod-count":(.*),"disrupted-nodes":.*,"NodeClaim":{"name":"(.*)"},"capacity-type"`)
@@ -53,6 +55,7 @@ type Nodeclaimstruct struct {
 	Nodepool               string
 	Instancetypes          string
 	Launchedtime           string
+	Launchfailure          string
 	Providerid             string
 	Instancetype           string
 	Zone                   string
@@ -239,6 +242,7 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 					Nodepool:               nodepool,
 					Instancetypes:          instancetypes,
 					Launchedtime:           "",
+					Launchfailure:          "",
 					Providerid:             "",
 					Instancetype:           "",
 					Zone:                   "",
@@ -288,6 +292,18 @@ func ParseKarpenterLogs(logline string, nodeclaimmap *map[string]Nodeclaimstruct
 					entry.Instancetype = matchslicesub[4]
 					entry.Zone = matchslicesub[5]
 					entry.Capacitytype = matchslicesub[6]
+					(*nodeclaimmap)[nodeclaim] = entry
+				}
+			} else {
+				fmt.Fprintf(os.Stderr, "Parsing error for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
+			}
+		case "failed launching nodeclaim":
+			// extract time, nodeclaim and AWS error code
+			if matchslicesub := matchPattern(failedLaunchPattern, logline); matchslicesub != nil {
+				if nodeclaim = matchslicesub[2]; nodeclaim == "" {
+					fmt.Fprintf(os.Stderr, "Parsing error empty \"NodeClaim\" for message \"%s\" in line %d in %s, probably Karpenter log syntax has changed!\n", matchslice[1], inputline, filename)
+				} else if entry, ok := (*nodeclaimmap)[nodeclaim]; ok {
+					entry.Launchfailure = matchslicesub[3]
 					(*nodeclaimmap)[nodeclaim] = entry
 				}
 			} else {

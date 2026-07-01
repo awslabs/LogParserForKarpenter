@@ -15,20 +15,7 @@
 
 \* Note: `"messageKind":"spot_interrupted"` is first supported with Karpenter version v1.1.x, so **LogParserForKarpenter (lp4k)** does not provide *interruptiontime* and *interruptionkind* in earlier versions
 
-### Nodeclaim Replacement Tracking
-
-When Karpenter performs consolidation with `decision: "replace"` (Karpenter >= 1.x), the disrupted nodeclaim(s) are replaced by a new one. **lp4k** tracks this relationship via the `reconcileID` field in the logs and exposes two CSV columns:
-
-| Column | Description |
-|---|---|
-| `Replacedby` | On the disrupted nodeclaim: name of its replacement nodeclaim |
-| `Replaces` | On the replacement nodeclaim: pipe-delimited name(s) of the disrupted nodeclaim(s) it replaces |
-
-This covers both 1-to-1 replacements and N-to-1 consolidations. For older Karpenter versions that only use `decision: "delete"`, these columns remain empty.
-
----
-
-It allows using either STDIN (for example for piping live Karpenter controller logs) or multiple Karpenter log files as input and will print CSV style formatted output of nodeclaim data ordered by createdtime to STDOUT, so one can easily redirect it into a file and analyse with tools like [Amazon QuickSight](https://docs.aws.amazon.com/quicksight/latest/user/welcome.html) or Microsoft Excel.
+It allows using either STDIN (for example for piping live Karpenter controller logs) or multiple Karpenter log files as input and will print CSV style formatted output of nodeclaim data ordered by createdtime to STDOUT, so one can easily redirect it into a file and analyse with tools like [lp4kchain](#lp4kchain), [lp4kstats](#lp4kstats), [Amazon QuickSight](https://docs.aws.amazon.com/quicksight/latest/user/welcome.html) or Microsoft Excel.
 
 **lp4k** supports two input formats which are automatically detected:
 1. **Plain text** — raw Karpenter controller log output (one JSON log line per line)
@@ -69,6 +56,17 @@ K8s handling can be configured using the following OS environment variables:
 | LP4K_TIME_FORMAT | "2006-01-02-15-04-05" | time format for ConfigMap names and S3 object timestamps, must be a valid Go time layout string
 
 \* Note: In mode `LP4K_CM_OVERRIDE=true` **lp4k** will read existing nodeclaim data from ConfigMap specified by LP4K_CM_PREFIX
+
+### Nodeclaim Replacement Tracking
+
+When Karpenter performs consolidation with `decision: "replace"` (Karpenter >= 1.x), the disrupted nodeclaim(s) are replaced by a new one. **lp4k** tracks this relationship via the `reconcileID` field in the logs and exposes two CSV columns:
+
+| Column | Description |
+|---|---|
+| `Replacedby` | On the disrupted nodeclaim: name of its replacement nodeclaim |
+| `Replaces` | On the replacement nodeclaim: pipe-delimited name(s) of the disrupted nodeclaim(s) it replaces |
+
+This covers both 1-to-1 replacements and N-to-1 consolidations. For older Karpenter versions that only use `decision: "delete"`, these columns remain empty.
 
 ### S3 Upload Configuration
 
@@ -221,18 +219,36 @@ LP4K_K8S_CONTEXT=my-cluster ./bin/lp4kcm lp4k-cm-2026-06-22-07-54-36
 
 # Generate HTML report (recommended — fully rendered charts, no external tools needed)
 ./bin/lp4kstats lp4k-output.csv report.html
+
+# Generate HTML with 1-minute interval and bar charts
+./bin/lp4kstats --interval 1m --chart-type bar lp4k-output.csv report.html
 ```
+
+**Options:**
+
+| Flag | Default | Description |
+|---|---|---|
+| `--interval` | `10m` | Bucket interval for timeline charts (e.g. `1m`, `5m`, `10m`, `30m`) |
+| `--chart-type` | `line` | Chart type for timelines (`line` or `bar`) |
 
 **Output formats:**
 - **HTML** (`.html`) — self-contained report with Mermaid.js pie charts and Chart.js timeline graphs rendered in any browser. This is the recommended output format.
 - **Markdown** (`.md` or stdout) — Mermaid code blocks for pie charts (renderable in GitHub or Mermaid-capable viewers). Timeline charts are embedded as HTML comments and only render in the HTML output.
 
 The HTML report includes:
-- **Region overview** — total nodeclaims, interruption/disruption rates, pie charts by AZ and nodepool
+- **Region overview** — total nodeclaims, interruption/disruption/launch failure rates, pie charts by AZ and nodepool
 - **Per Availability Zone** — breakdown table with rates
 - **Per NodePool** — general stats, AZ drill-down, pie charts, capacity pool diversity (distinct instance types per AZ)
-- **Timeline charts** — spot interruptions, underutilized disruptions, and empty disruptions over time (one line per AZ)
+- **Timeline charts** — spot interruptions, underutilized disruptions, empty disruptions, and launch failures over time (one line per AZ). Interactive: click legend entries to toggle individual AZ series on/off
 - **Instance type table** — per-AZ count with interruption annotations, collapsible for large datasets
+
+The following screenshots are excerpts from a single HTML report page:
+
+![lp4kstats summary](doc/imgs/lp4kstats-summary.png "Region overview with time range, metrics, and pie charts")
+
+![lp4kstats nodepool overview](doc/imgs/lp4kstats-nodepool-overview.png "Per-NodePool general stats, AZ breakdown, and capacity pool diversity")
+
+![lp4kstats nodepool timelines](doc/imgs/lp4kstats-nodepool-timelines.png "Per-NodePool timeline charts showing event distribution over time")
 
 #### lp4kchain
 
@@ -278,7 +294,7 @@ A legend and statistics table are included in the diagram showing total replacem
 
 See [doc/lp4kchain-install.md](doc/lp4kchain-install.md) for mmdc installation instructions.
 
-![Sample replacement chain diagram](lp4k-replacement-chains.png "Example lp4kchain output showing cascading consolidation churn")
+![Sample replacement chain diagram](doc/imgs/lp4k-replacement-chains.png "Example lp4kchain output showing cascading consolidation churn")
 
 ### Manual Analysis
 
@@ -286,7 +302,7 @@ The simplest way for manual analysis is to use the CSV output and parse it using
 ```console
 # indexed header
 $ head -1 sample-multi-file-lp4k-output.csv 
-Nodeclaim[1],Createdtime[2],Nodepool[3],Instancetypes[4],Launchedtime[5],Providerid[6],Instancetype[7],Zone[8],Capacitytype[9],Registeredtime[10],K8snodename[11],Initializedtime[12],Nodereadytime[13],Nodereadytimesec[14],Disruptiontime[15],Disruptionreason[16],Disruptiondecision[17],Disruptednodecount[18],Replacementnodecount[19],Disruptedpodcount[20],Replacedby[21],Replaces[22],Annotationtime[23],Annotation[24],Tainttime[25],Taint[26],Interruptiontime[27],Interruptionkind[28],Deletedtime[29],Nodeterminationtime[30],Nodeterminationtimesec[31],Nodelifecycletime[32],Nodelifecycletimesec[33],Initialized[34],Deleted[35]
+Nodeclaim[1],Createdtime[2],Nodepool[3],Instancetypes[4],Launchedtime[5],Launchfailure[6],Providerid[7],Instancetype[8],Zone[9],Capacitytype[10],Registeredtime[11],K8snodename[12],Initializedtime[13],Nodereadytime[14],Nodereadytimesec[15],Disruptiontime[16],Disruptionreason[17],Disruptiondecision[18],Disruptednodecount[19],Replacementnodecount[20],Disruptedpodcount[21],Savings[22],Replacedby[23],Replaces[24],Annotationtime[25],Annotation[26],Tainttime[27],Taint[28],Interruptiontime[29],Interruptionkind[30],Deletedtime[31],Nodeterminationtime[32],Nodeterminationtimesec[33],Nodelifecycletime[34],Nodelifecycletimesec[35],Initialized[36],Deleted[37]
 
 # print nodeclaim[index/column=1], nodereadytime[13],nodereadytimesec[14]
 $ cat sample-multi-file-lp4k-output.csv | awk -F  ',' '{print $1,$13,$14 }' | more
@@ -318,9 +334,9 @@ default-mpz2w 46.277s 46.3
 
 [Amazon QuickSight](https://docs.aws.amazon.com/quicksight/latest/user/welcome.html) or Microsoft Excel are possible choices to use the CSV output for advanced analysis to create graphs and/or pivot tables.
 
-![Sample 1](Quicksight_sample_graph.png
+![Sample 1](doc/imgs/Quicksight_sample_graph.png
  "Sample Quicksight graph")
-![Sample 2](Quicksight_sample_pivot_table.png
+![Sample 2](doc/imgs/Quicksight_sample_pivot_table.png
  "Sample Quicksight pivot table")
 
 ## Contributing
