@@ -21,6 +21,9 @@ type poolAZStats struct {
 }
 
 func main() {
+	intervalFlag := flag.String("interval", "10m", "Bucket interval for timeline charts (e.g. 1m, 5m, 10m, 30m)")
+	chartTypeFlag := flag.String("chart-type", "line", "Chart type for timelines (line or bar)")
+
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: lp4kstats [flags] [lp4k-output.csv] [output.md]\n")
 		fmt.Fprintf(os.Stderr, "\nReads lp4k CSV output and generates a Markdown statistics report with Mermaid charts.\n")
@@ -30,6 +33,21 @@ func main() {
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+
+	interval, err := time.ParseDuration(*intervalFlag)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: invalid --interval %q: %v\n", *intervalFlag, err)
+		os.Exit(1)
+	}
+	chartType := *chartTypeFlag
+	if chartType != "line" && chartType != "bar" {
+		fmt.Fprintf(os.Stderr, "Error: --chart-type must be \"line\" or \"bar\"\n")
+		os.Exit(1)
+	}
+	intervalLabel := interval.String()
+	if strings.HasSuffix(intervalLabel, "m0s") {
+		intervalLabel = strings.TrimSuffix(intervalLabel, "0s")
+	}
 
 	args := flag.Args()
 	var outputFile string
@@ -90,6 +108,8 @@ func main() {
 		disruptionTime   string
 		savings          string
 		replaces         string
+		launchFailure    string
+		createdTime      string
 	}
 
 	var records []nodeclaimRecord
@@ -105,7 +125,7 @@ func main() {
 			continue
 		}
 
-		records = append(records, nodeclaimRecord{
+		rec := nodeclaimRecord{
 			name:             row[colIdx["Nodeclaim"]],
 			nodepool:         row[colIdx["Nodepool"]],
 			zone:             row[colIdx["Zone"]],
@@ -117,7 +137,12 @@ func main() {
 			disruptionTime:   row[colIdx["Disruptiontime"]],
 			savings:          row[colIdx["Savings"]],
 			replaces:         row[colIdx["Replaces"]],
-		})
+			createdTime:      row[colIdx["Createdtime"]],
+		}
+		if idx, ok := colIdx["Launchfailure"]; ok && idx < len(row) {
+			rec.launchFailure = row[idx]
+		}
+		records = append(records, rec)
 
 		for _, col := range timeColumns {
 			if idx, ok := colIdx[col]; ok && idx < len(row) {
@@ -148,6 +173,11 @@ func main() {
 			regions[region] = true
 		}
 	}
+	sortedRegions := make([]string, 0, len(regions))
+	for r := range regions {
+		sortedRegions = append(sortedRegions, r)
+	}
+	sort.Strings(sortedRegions)
 
 	// Count records without a zone
 	noZoneCount := 0
@@ -163,6 +193,7 @@ func main() {
 	regionInterrupted := make(map[string]int)
 	regionUnderutilized := make(map[string]int)
 	regionEmpty := make(map[string]int)
+	regionLaunchFailed := make(map[string]int)
 	// region -> AZ -> stats
 	regionAZ := make(map[string]map[string]*poolAZStats)
 	// region -> pool -> stats
@@ -170,27 +201,44 @@ func main() {
 	// region -> pool -> AZ -> stats
 	regionPoolAZ := make(map[string]map[string]map[string]*poolAZStats)
 
+	regionActive := make(map[string]int)
+	poolActive := make(map[string]int)
+	poolTotal := make(map[string]int)
+	poolLaunchFailed := make(map[string]int)
+
 	for _, rec := range records {
+		interrupted := rec.interruptKind == "spot_interrupted"
+		underutilized := !interrupted && rec.disruptionReason == "underutilized"
+		empty := !interrupted && rec.disruptionReason == "empty"
+		hasEvent := interrupted || underutilized || empty || rec.launchFailure != ""
+
+		// Count totals and active for all records (region derived from sortedRegions[0])
+		regionTotal[sortedRegions[0]]++
+		poolTotal[rec.nodepool]++
+		if !hasEvent {
+			regionActive[sortedRegions[0]]++
+			poolActive[rec.nodepool]++
+		}
+		if interrupted {
+			regionInterrupted[sortedRegions[0]]++
+		}
+		if underutilized {
+			regionUnderutilized[sortedRegions[0]]++
+		}
+		if empty {
+			regionEmpty[sortedRegions[0]]++
+		}
+		if rec.launchFailure != "" {
+			regionLaunchFailed[sortedRegions[0]]++
+			poolLaunchFailed[rec.nodepool]++
+		}
+
 		if rec.zone == "" {
 			continue
 		}
-		region := rec.zone[:len(rec.zone)-1]
+		region := sortedRegions[0]
 		az := rec.zone
 		pool := rec.nodepool
-		interrupted := rec.interruptKind == "spot_interrupted"
-		underutilized := rec.disruptionReason == "underutilized"
-		empty := rec.disruptionReason == "empty"
-
-		regionTotal[region]++
-		if interrupted {
-			regionInterrupted[region]++
-		}
-		if underutilized {
-			regionUnderutilized[region]++
-		}
-		if empty {
-			regionEmpty[region]++
-		}
 
 		// Region -> AZ
 		if regionAZ[region] == nil {
@@ -269,12 +317,32 @@ func main() {
 		regionSavings[region] += savingsVal
 	}
 
-	// Sort regions
-	sortedRegions := make([]string, 0, len(regions))
-	for r := range regions {
-		sortedRegions = append(sortedRegions, r)
+
+
+	// Compute global timeline buckets from overall time range
+	var globalTMin, globalTMax time.Time
+	var globalBucketLabels []string
+	var globalXLabels []string
+	var globalNumBuckets int
+	if minTime != "" && maxTime != "" {
+		tStart, err1 := time.Parse(time.RFC3339Nano, minTime)
+		tEnd, err2 := time.Parse(time.RFC3339Nano, maxTime)
+		if err1 == nil && err2 == nil {
+			globalTMin = tStart.Truncate(interval)
+			globalTMax = tEnd.Truncate(interval).Add(interval)
+			for t := globalTMin; t.Before(globalTMax); t = t.Add(interval) {
+				globalBucketLabels = append(globalBucketLabels, t.Format("15:04"))
+			}
+			globalNumBuckets = len(globalBucketLabels)
+			for _, l := range globalBucketLabels {
+				if interval >= 30*time.Minute || strings.HasSuffix(l, ":00") {
+					globalXLabels = append(globalXLabels, l)
+				} else {
+					globalXLabels = append(globalXLabels, "")
+				}
+			}
+		}
 	}
-	sort.Strings(sortedRegions)
 
 	// Generate markdown
 	var md strings.Builder
@@ -311,21 +379,35 @@ func main() {
 		if regionTotal[region] > 0 {
 			interruptPct = float64(regionInterrupted[region]) / float64(regionTotal[region]) * 100
 		}
-		md.WriteString(fmt.Sprintf("| Spot Interruptions (Rate) | %d (%.1f%%) |\n", regionInterrupted[region], interruptPct))
+		md.WriteString(fmt.Sprintf("| Spot Interruptions | %d (%.1f%%) |\n", regionInterrupted[region], interruptPct))
 		underutilPct := 0.0
 		if regionTotal[region] > 0 {
 			underutilPct = float64(regionUnderutilized[region]) / float64(regionTotal[region]) * 100
 		}
-		md.WriteString(fmt.Sprintf("| Underutilized Disruptions (Rate) | %d (%.1f%%) |\n", regionUnderutilized[region], underutilPct))
+		md.WriteString(fmt.Sprintf("| Underutilized Disruptions | %d (%.1f%%) |\n", regionUnderutilized[region], underutilPct))
 		emptyPct := 0.0
 		if regionTotal[region] > 0 {
 			emptyPct = float64(regionEmpty[region]) / float64(regionTotal[region]) * 100
 		}
-		md.WriteString(fmt.Sprintf("| Empty Disruptions (Rate) | %d (%.1f%%) |\n", regionEmpty[region], emptyPct))
+		md.WriteString(fmt.Sprintf("| Empty Disruptions | %d (%.1f%%) |\n", regionEmpty[region], emptyPct))
+		launchFailPct := 0.0
+		if regionTotal[region] > 0 {
+			launchFailPct = float64(regionLaunchFailed[region]) / float64(regionTotal[region]) * 100
+		}
+		md.WriteString(fmt.Sprintf("| Launch Failures | %d (%.1f%%) |\n", regionLaunchFailed[region], launchFailPct))
+		activePct := 0.0
+		if regionTotal[region] > 0 {
+			activePct = float64(regionActive[region]) / float64(regionTotal[region]) * 100
+		}
+		md.WriteString(fmt.Sprintf("| Active (no event) | %d (%.1f%%) |\n", regionActive[region], activePct))
 		md.WriteString("\n")
 
 		if noZoneCount > 0 {
-			md.WriteString(fmt.Sprintf("*Note: %d NodeClaim(s) without an AZ excluded from statistics.*\n\n", noZoneCount))
+			if noZoneCount == regionLaunchFailed[region] {
+				md.WriteString(fmt.Sprintf("*Note: %d NodeClaim(s) with launch failures excluded from further (AZ-level) statistics.*\n\n", noZoneCount))
+			} else {
+				md.WriteString(fmt.Sprintf("*Note: %d NodeClaim(s) without an AZ excluded from further (AZ-level) statistics.*\n\n", noZoneCount))
+			}
 		}
 
 		// Savings table
@@ -401,23 +483,28 @@ func main() {
 			md.WriteString("```\n\n")
 		}
 
+
+
 		md.WriteString("<!-- /charts-row -->\n\n")
 
 		// Per-AZ breakdown
 		md.WriteString("### Per Availability Zone Overview\n\n")
-		md.WriteString("| AZ | Total | Spot Interruptions (Rate) | Underutilized Disruptions (Rate) | Empty Disruptions (Rate) |\n")
-		md.WriteString("|----|-------|------------------------|---------------------|-------------|\n")
+		md.WriteString("| AZ | Total | Spot Interruptions | Underutilized Disruptions | Empty Disruptions | Active (no event) |\n")
+		md.WriteString("|----|-------|------------------------|---------------------|-------------|-------------------|\n")
 		for _, az := range sortedAZs {
 			s := azStats[az]
 			azIntPct := 0.0
 			azUtilPct := 0.0
 			azEmptyPct := 0.0
+			azActive := s.total - s.interrupted - s.underutilized - s.empty
+			azActivePct := 0.0
 			if s.total > 0 {
 				azIntPct = float64(s.interrupted) / float64(s.total) * 100
 				azUtilPct = float64(s.underutilized) / float64(s.total) * 100
 				azEmptyPct = float64(s.empty) / float64(s.total) * 100
+				azActivePct = float64(azActive) / float64(s.total) * 100
 			}
-			md.WriteString(fmt.Sprintf("| %s | %d | %d (%.1f%%) | %d (%.1f%%) | %d (%.1f%%) |\n", az, s.total, s.interrupted, azIntPct, s.underutilized, azUtilPct, s.empty, azEmptyPct))
+			md.WriteString(fmt.Sprintf("| %s | %d | %d (%.1f%%) | %d (%.1f%%) | %d (%.1f%%) | %d (%.1f%%) |\n", az, s.total, s.interrupted, azIntPct, s.underutilized, azUtilPct, s.empty, azEmptyPct, azActive, azActivePct))
 		}
 		md.WriteString("\n")
 
@@ -430,25 +517,36 @@ func main() {
 			md.WriteString("<!-- tables-row -->\n\n")
 
 			// General table
+			pt := poolTotal[pool]
 			md.WriteString(fmt.Sprintf("#### %s - General\n\n", pool))
 			md.WriteString(fmt.Sprintf("| Metric | Value |\n"))
 			md.WriteString(fmt.Sprintf("|--------|-------|\n"))
-			md.WriteString(fmt.Sprintf("| Total NodeClaims | %d |\n", ps.total))
+			md.WriteString(fmt.Sprintf("| Total NodeClaims | %d |\n", pt))
 			poolInterruptPct := 0.0
-			if ps.total > 0 {
-				poolInterruptPct = float64(ps.interrupted) / float64(ps.total) * 100
+			if pt > 0 {
+				poolInterruptPct = float64(ps.interrupted) / float64(pt) * 100
 			}
-			md.WriteString(fmt.Sprintf("| Spot Interruptions (Rate) | %d (%.1f%%) |\n", ps.interrupted, poolInterruptPct))
+			md.WriteString(fmt.Sprintf("| Spot Interruptions | %d (%.1f%%) |\n", ps.interrupted, poolInterruptPct))
 			poolUnderutilPct := 0.0
-			if ps.total > 0 {
-				poolUnderutilPct = float64(ps.underutilized) / float64(ps.total) * 100
+			if pt > 0 {
+				poolUnderutilPct = float64(ps.underutilized) / float64(pt) * 100
 			}
-			md.WriteString(fmt.Sprintf("| Underutilized Disruptions (Rate) | %d (%.1f%%) |\n", ps.underutilized, poolUnderutilPct))
+			md.WriteString(fmt.Sprintf("| Underutilized Disruptions | %d (%.1f%%) |\n", ps.underutilized, poolUnderutilPct))
 			poolEmptyPct := 0.0
-			if ps.total > 0 {
-				poolEmptyPct = float64(ps.empty) / float64(ps.total) * 100
+			if pt > 0 {
+				poolEmptyPct = float64(ps.empty) / float64(pt) * 100
 			}
-			md.WriteString(fmt.Sprintf("| Empty Disruptions (Rate) | %d (%.1f%%) |\n", ps.empty, poolEmptyPct))
+			md.WriteString(fmt.Sprintf("| Empty Disruptions | %d (%.1f%%) |\n", ps.empty, poolEmptyPct))
+			poolLaunchFailPct := 0.0
+			if pt > 0 {
+				poolLaunchFailPct = float64(poolLaunchFailed[pool]) / float64(pt) * 100
+			}
+			md.WriteString(fmt.Sprintf("| Launch Failures | %d (%.1f%%) |\n", poolLaunchFailed[pool], poolLaunchFailPct))
+			poolActivePct := 0.0
+			if pt > 0 {
+				poolActivePct = float64(poolActive[pool]) / float64(pt) * 100
+			}
+			md.WriteString(fmt.Sprintf("| Active (no event) | %d (%.1f%%) |\n", poolActive[pool], poolActivePct))
 			md.WriteString("\n")
 
 			// By AZ table
@@ -456,19 +554,22 @@ func main() {
 			sortedPoolAZs := sortedKeys(poolAZs)
 
 			md.WriteString(fmt.Sprintf("#### %s — by Availability Zone\n\n", pool))
-			md.WriteString("| AZ | Total | Spot Interruptions (Rate) | Underutilized Disruptions (Rate) | Empty Disruptions (Rate) |\n")
-			md.WriteString("|----|-------|------------------------|---------------------|-------------|\n")
+			md.WriteString("| AZ | Total | Spot Interruptions | Underutilized Disruptions | Empty Disruptions | Active (no event) |\n")
+			md.WriteString("|----|-------|------------------------|---------------------|-------------|-------------------|\n")
 			for _, az := range sortedPoolAZs {
 				s := poolAZs[az]
 				azIntPct := 0.0
 				azUtilPct := 0.0
 				azEmptyPct := 0.0
+				azActive := s.total - s.interrupted - s.underutilized - s.empty
+				azActivePct := 0.0
 				if s.total > 0 {
 					azIntPct = float64(s.interrupted) / float64(s.total) * 100
 					azUtilPct = float64(s.underutilized) / float64(s.total) * 100
 					azEmptyPct = float64(s.empty) / float64(s.total) * 100
+					azActivePct = float64(azActive) / float64(s.total) * 100
 				}
-				md.WriteString(fmt.Sprintf("| %s | %d | %d (%.1f%%) | %d (%.1f%%) | %d (%.1f%%) |\n", az, s.total, s.interrupted, azIntPct, s.underutilized, azUtilPct, s.empty, azEmptyPct))
+				md.WriteString(fmt.Sprintf("| %s | %d | %d (%.1f%%) | %d (%.1f%%) | %d (%.1f%%) | %d (%.1f%%) |\n", az, s.total, s.interrupted, azIntPct, s.underutilized, azUtilPct, s.empty, azEmptyPct, azActive, azActivePct))
 			}
 			md.WriteString("\n")
 
@@ -688,32 +789,15 @@ func main() {
 					}
 				}
 
-				// Determine time range and bucket into 10-minute intervals
-				var allTimes []time.Time
-				for _, e := range interruptEvents {
-					allTimes = append(allTimes, e.t)
-				}
-				for _, e := range underutilEvents {
-					allTimes = append(allTimes, e.t)
-				}
-				for _, e := range emptyEvents {
-					allTimes = append(allTimes, e.t)
-				}
+				// Use global time range for consistent timeline axis
+				hasEvents := len(interruptEvents) > 0 || len(underutilEvents) > 0 || len(emptyEvents) > 0
 
-				if len(allTimes) > 0 {
-					sort.Slice(allTimes, func(i, j int) bool { return allTimes[i].Before(allTimes[j]) })
-					tMin := allTimes[0].Truncate(10 * time.Minute)
-					tMax := allTimes[len(allTimes)-1].Truncate(10 * time.Minute).Add(10 * time.Minute)
-
-					// Build time buckets
-					var bucketLabels []string
-					for t := tMin; t.Before(tMax); t = t.Add(10 * time.Minute) {
-						bucketLabels = append(bucketLabels, t.Format("15:04"))
-					}
-					numBuckets := len(bucketLabels)
+				if hasEvents && globalNumBuckets > 0 {
+					numBuckets := globalNumBuckets
+					xLabels := globalXLabels
 
 					bucketIdx := func(t time.Time) int {
-						idx := int(t.Sub(tMin) / (10 * time.Minute))
+						idx := int(t.Sub(globalTMin) / (interval))
 						if idx >= numBuckets {
 							idx = numBuckets - 1
 						}
@@ -721,16 +805,6 @@ func main() {
 							idx = 0
 						}
 						return idx
-					}
-
-					// Only show full-hour labels on x-axis
-					var xLabels []string
-					for _, l := range bucketLabels {
-						if strings.HasSuffix(l, ":00") {
-							xLabels = append(xLabels, l)
-						} else {
-							xLabels = append(xLabels, "")
-						}
 					}
 
 					// Spot interruption timeline
@@ -745,7 +819,8 @@ func main() {
 
 						md.WriteString(fmt.Sprintf("#### %s — Spot Interruptions Timeline\n\n", pool))
 						md.WriteString("<!-- chartjs\n")
-						md.WriteString("title: Spot Interruptions per 10min\n")
+						md.WriteString(fmt.Sprintf("type: %s\n", chartType))
+						md.WriteString(fmt.Sprintf("title: Spot Interruptions per %s\n", intervalLabel))
 						md.WriteString(fmt.Sprintf("labels: %s\n", strings.Join(xLabels, ",")))
 						for _, az := range sortedPoolAZs {
 							md.WriteString(fmt.Sprintf("series: %s: %s\n", az, intSliceToString(azBuckets[az])))
@@ -768,7 +843,8 @@ func main() {
 
 						md.WriteString(fmt.Sprintf("#### %s — Underutilized Disruptions Timeline\n\n", pool))
 						md.WriteString("<!-- chartjs\n")
-						md.WriteString("title: Underutilized Disruptions per 10min\n")
+						md.WriteString(fmt.Sprintf("type: %s\n", chartType))
+						md.WriteString(fmt.Sprintf("title: Underutilized Disruptions per %s\n", intervalLabel))
 						md.WriteString(fmt.Sprintf("labels: %s\n", strings.Join(xLabels, ",")))
 						for _, az := range sortedPoolAZs {
 							md.WriteString(fmt.Sprintf("series: %s: %s\n", az, intSliceToString(azBuckets[az])))
@@ -791,7 +867,8 @@ func main() {
 
 						md.WriteString(fmt.Sprintf("#### %s — Empty Disruptions Timeline\n\n", pool))
 						md.WriteString("<!-- chartjs\n")
-						md.WriteString("title: Empty Disruptions per 10min\n")
+						md.WriteString(fmt.Sprintf("type: %s\n", chartType))
+						md.WriteString(fmt.Sprintf("title: Empty Disruptions per %s\n", intervalLabel))
 						md.WriteString(fmt.Sprintf("labels: %s\n", strings.Join(xLabels, ",")))
 						for _, az := range sortedPoolAZs {
 							md.WriteString(fmt.Sprintf("series: %s: %s\n", az, intSliceToString(azBuckets[az])))
@@ -836,7 +913,8 @@ func main() {
 
 						md.WriteString(fmt.Sprintf("#### %s — Top Interrupted Instance Type per AZ Timeline\n\n", pool))
 						md.WriteString("<!-- chartjs\n")
-						md.WriteString("title: Top Interrupted Instance Type per AZ per 10min\n")
+						md.WriteString(fmt.Sprintf("type: %s\n", chartType))
+						md.WriteString(fmt.Sprintf("title: Top Interrupted Instance Type per AZ per %s\n", intervalLabel))
 						md.WriteString(fmt.Sprintf("labels: %s\n", strings.Join(xLabels, ",")))
 						for _, az := range sortedPoolAZs {
 							if topInstancePerAZ[az] != "" {
@@ -858,6 +936,45 @@ func main() {
 					md.WriteString("<!-- placeholder: No Empty Disruptions data -->\n\n")
 					md.WriteString(fmt.Sprintf("#### %s — Top Interrupted Instance Type per AZ Timeline\n\n", pool))
 					md.WriteString("<!-- placeholder: No Spot Interruptions data -->\n\n")
+				}
+
+				// Launch Failures Timeline (uses createdTime since failed launches have no zone/launchedTime)
+				{
+					var launchFailTimes []time.Time
+					for _, rec := range records {
+						if rec.nodepool != pool || rec.launchFailure == "" || rec.createdTime == "" {
+							continue
+						}
+						t, err := time.Parse(time.RFC3339Nano, rec.createdTime)
+						if err == nil {
+							launchFailTimes = append(launchFailTimes, t)
+						}
+					}
+
+					if len(launchFailTimes) > 0 && globalNumBuckets > 0 {
+						buckets := make([]int, globalNumBuckets)
+						for _, t := range launchFailTimes {
+							idx := int(t.Sub(globalTMin) / (interval))
+							if idx >= globalNumBuckets {
+								idx = globalNumBuckets - 1
+							}
+							if idx < 0 {
+								idx = 0
+							}
+							buckets[idx]++
+						}
+
+						md.WriteString(fmt.Sprintf("#### %s — Launch Failures Timeline\n\n", pool))
+						md.WriteString("<!-- chartjs\n")
+						md.WriteString(fmt.Sprintf("type: %s\n", chartType))
+						md.WriteString(fmt.Sprintf("title: Launch Failures per %s\n", intervalLabel))
+						md.WriteString(fmt.Sprintf("labels: %s\n", strings.Join(globalXLabels, ",")))
+						md.WriteString(fmt.Sprintf("series: Launch Failures: %s\n", intSliceToString(buckets)))
+						md.WriteString("/chartjs -->\n\n")
+					} else {
+						md.WriteString(fmt.Sprintf("#### %s — Launch Failures Timeline\n\n", pool))
+						md.WriteString("<!-- placeholder: No Launch Failures data -->\n\n")
+					}
 				}
 			}
 		}
@@ -920,6 +1037,7 @@ tr:nth-child(even) { background: #f2f2f2; }
 	inTablesRow := false
 	inTableCell := false
 	var chartTitle string
+	var chartType string
 	var chartLabels []string
 	type chartSeries struct {
 		name string
@@ -934,6 +1052,7 @@ tr:nth-child(even) { background: #f2f2f2; }
 		if strings.TrimSpace(line) == "<!-- chartjs" {
 			inChartJS = true
 			chartTitle = ""
+			chartType = "line"
 			chartLabels = nil
 			chartSeriesList = nil
 			continue
@@ -945,14 +1064,18 @@ tr:nth-child(even) { background: #f2f2f2; }
 			html.WriteString(fmt.Sprintf("<div class=\"timeline-chart\"><canvas id=\"%s\"></canvas></div>\n", canvasID))
 			html.WriteString("<script>\n")
 			html.WriteString(fmt.Sprintf("new Chart(document.getElementById('%s'), {\n", canvasID))
-			html.WriteString("  type: 'line',\n")
+			html.WriteString(fmt.Sprintf("  type: '%s',\n", chartType))
 			html.WriteString("  data: {\n")
 			// Labels as JSON array
 			html.WriteString(fmt.Sprintf("    labels: [%s],\n", strings.Join(quoteLabels(chartLabels), ",")))
 			html.WriteString("    datasets: [\n")
 			for i, s := range chartSeriesList {
 				color := colors[i%len(colors)]
-				html.WriteString(fmt.Sprintf("      {label:'%s', data:[%s], borderColor:'%s', backgroundColor:'%s', tension:0.3, pointRadius:1},\n", s.name, strings.Join(s.data, ","), color, color))
+				if chartType == "bar" {
+					html.WriteString(fmt.Sprintf("      {label:'%s', data:[%s], backgroundColor:'%s'},\n", s.name, strings.Join(s.data, ","), color))
+				} else {
+					html.WriteString(fmt.Sprintf("      {label:'%s', data:[%s], borderColor:'%s', backgroundColor:'%s', tension:0.3, pointRadius:1},\n", s.name, strings.Join(s.data, ","), color, color))
+				}
 			}
 			html.WriteString("    ]\n")
 			html.WriteString("  },\n")
@@ -960,7 +1083,7 @@ tr:nth-child(even) { background: #f2f2f2; }
 			html.WriteString(fmt.Sprintf("    plugins: {title: {display:true, text:'%s'}},\n", chartTitle))
 			html.WriteString("    scales: {\n")
 			html.WriteString("      x: {title: {display:true, text:'Time (UTC)'}, ticks: {callback: function(val,idx) { var l=this.getLabelForValue(idx); return l||null; }, maxRotation:0}},\n")
-			html.WriteString("      y: {title: {display:true, text:'Events per 10min'}, beginAtZero:true, ticks:{stepSize:1}}\n")
+			html.WriteString("      y: {title: {display:true, text:'Events'}, beginAtZero:true, ticks:{stepSize:1}}\n")
 			html.WriteString("    }\n")
 			html.WriteString("  }\n")
 			html.WriteString("});\n")
@@ -968,7 +1091,9 @@ tr:nth-child(even) { background: #f2f2f2; }
 			continue
 		}
 		if inChartJS {
-			if strings.HasPrefix(line, "title: ") {
+			if strings.HasPrefix(line, "type: ") {
+				chartType = line[6:]
+			} else if strings.HasPrefix(line, "title: ") {
 				chartTitle = line[7:]
 			} else if strings.HasPrefix(line, "labels: ") {
 				chartLabels = strings.Split(line[8:], ",")
