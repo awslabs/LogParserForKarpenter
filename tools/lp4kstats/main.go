@@ -76,6 +76,8 @@ func main() {
 		}
 	}
 
+	timeColumns := []string{"Createdtime", "Launchedtime", "Registeredtime", "Initializedtime", "Disruptiontime", "Annotationtime", "Tainttime", "Interruptiontime", "Deletedtime"}
+
 	type nodeclaimRecord struct {
 		name             string
 		nodepool         string
@@ -91,6 +93,7 @@ func main() {
 	}
 
 	var records []nodeclaimRecord
+	var minTime, maxTime string
 
 	for {
 		row, err := reader.Read()
@@ -115,6 +118,21 @@ func main() {
 			savings:          row[colIdx["Savings"]],
 			replaces:         row[colIdx["Replaces"]],
 		})
+
+		for _, col := range timeColumns {
+			if idx, ok := colIdx[col]; ok && idx < len(row) {
+				t := row[idx]
+				if t == "" {
+					continue
+				}
+				if minTime == "" || t < minTime {
+					minTime = t
+				}
+				if maxTime == "" || t > maxTime {
+					maxTime = t
+				}
+			}
+		}
 	}
 
 	if len(records) == 0 {
@@ -262,6 +280,25 @@ func main() {
 	var md strings.Builder
 
 	md.WriteString("# Karpenter Statistics Report\n\n")
+
+	if minTime != "" && maxTime != "" {
+		md.WriteString("<!-- tables-row -->\n\n")
+		md.WriteString("#### Time Range\n\n")
+		md.WriteString("| Metric | Value |\n")
+		md.WriteString("|--------|-------|\n")
+		md.WriteString(fmt.Sprintf("| From | %s |\n", minTime))
+		md.WriteString(fmt.Sprintf("| To | %s |\n", maxTime))
+		tStart, err1 := time.Parse(time.RFC3339Nano, minTime)
+		tEnd, err2 := time.Parse(time.RFC3339Nano, maxTime)
+		if err1 == nil && err2 == nil {
+			duration := tEnd.Sub(tStart)
+			hours := int(duration.Hours())
+			minutes := int(duration.Minutes()) % 60
+			md.WriteString(fmt.Sprintf("| Duration | %dh %dm |\n", hours, minutes))
+		}
+		md.WriteString("\n")
+		md.WriteString("<!-- /tables-row -->\n\n")
+	}
 
 	for _, region := range sortedRegions {
 		md.WriteString(fmt.Sprintf("## Region: %s\n\n", region))
